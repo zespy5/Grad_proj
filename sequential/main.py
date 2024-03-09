@@ -36,6 +36,7 @@ def main():
     lr = 0.00005
     epoch = 70
     batch_size = 256
+    weight_decay = 0.001
     ## DATA ##
     data_local = False
     dataset = "bert"
@@ -142,7 +143,7 @@ def main():
         ).to(device)
 
     criterion = nn.CrossEntropyLoss(ignore_index=0)
-    optimizer = Adam(params=model.parameters(), lr=lr)
+    optimizer = Adam(params=model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lambda epoch: 0.85**epoch)
 
     ############# TRAIN AND EVAL #############
