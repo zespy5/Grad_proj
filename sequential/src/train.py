@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from src.model import BERT4Rec, BERT4RecWithHF, MLPBERT4Rec
 from src.utils import ndcg_at_k, recall_at_k
 from tqdm import tqdm
 
@@ -12,7 +13,11 @@ def train(model, optimizer, scheduler, dataloader, criterion, device):
         tokens = tokens.to(device)
         labels = labels.to(device)
 
-        logits = model(tokens, labels)
+        if isinstance(model, (BERT4RecWithHF, MLPBERT4Rec)):
+            logits = model(tokens, labels)
+        if isinstance(model, (BERT4Rec)):
+            logits = model(tokens)
+
         logits = logits.view(-1, logits.size(-1))
         labels = labels.view(-1)
         loss = criterion(logits, labels)
