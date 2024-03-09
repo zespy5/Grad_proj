@@ -13,9 +13,9 @@ def train(model, optimizer, scheduler, dataloader, criterion, device):
         tokens = tokens.to(device)
         labels = labels.to(device)
 
-        if isinstance(model, (BERT4RecWithHF, MLPBERT4Rec)):
+        if isinstance(model, (MLPBERT4Rec)):
             logits = model(tokens, labels)
-        if isinstance(model, (BERT4Rec)):
+        if isinstance(model, (BERT4Rec, BERT4RecWithHF)):
             logits = model(tokens)
 
         logits = logits.view(-1, logits.size(-1))
@@ -51,7 +51,10 @@ def eval(
             labels = labels.to(device)
             users = users.to(device)
 
-            logits = model(tokens, labels)
+            if isinstance(model, (MLPBERT4Rec)):
+                logits = model(tokens, labels)
+            if isinstance(model, (BERT4Rec, BERT4RecWithHF)):
+                logits = model(tokens)
 
             loss = criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
             total_loss += loss.item()

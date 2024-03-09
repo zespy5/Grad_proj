@@ -118,20 +118,15 @@ class BERT4Rec(nn.Module):
 
         self.out = nn.Linear(hidden_size, self.num_item + 1)
 
-    def forward(self, log_seqs):
-        seqs = self.item_emb(torch.tensor(log_seqs).to(self.device))
+    def forward(self, tokens):
+        seqs = self.item_emb(tokens).to(self.device)
         if self.pos_emb:
-            positions = np.tile(np.array(range(log_seqs.shape[1])), [log_seqs.shape[0], 1])
+            positions = np.tile(np.array(range(tokens.shape[1])), [tokens.shape[0], 1])
             seqs += self.pos_emb(torch.tensor(positions).to(self.device))
         seqs = self.emb_layernorm(self.dropout(seqs))
 
-        mask = (
-            torch.tensor(log_seqs > 0)
-            .unsqueeze(1)
-            .repeat(1, log_seqs.shape[1], 1)
-            .unsqueeze(1)
-            .to(self.device)
-        )
+        mask = (tokens > 0).unsqueeze(1).repeat(1, tokens.shape[1], 1).unsqueeze(1).to(self.device)
+        
         for block in self.bert:
             seqs, _ = block(seqs, mask)
 
@@ -152,7 +147,8 @@ class BERT4RecWithHF(nn.Module):
         pos_emb=False,
         device="cpu",
     ):
-
+        super(BERT4RecWithHF, self).__init__()
+        
         self.num_items = num_items
         self.hidden_size = hidden_size
         self.hidden_act = hidden_act
@@ -179,23 +175,15 @@ class BERT4RecWithHF(nn.Module):
 
         if not pos_emb:
             # remove pos_emb
-            pos_emb_shape = self.bert.embeddings.position_embeddings.weight.shape
-            self.bert.embeddings.position_embeddings.weight.data = torch.zeros(pos_emb_shape)
-            self.bert.embeddings.position_embeddings.requires_grad_ = False
+            pos_emb_shape = self.bert.bert.embeddings.position_embeddings.weight.shape
+            self.bert.bert.embeddings.position_embeddings.weight.data = torch.zeros(pos_emb_shape)
+            self.bert.bert.embeddings.position_embeddings.weight.requires_grad = False
 
-    def forward(self, tokens, labels):
-        token_type_ids = torch.zeros_like(tokens)
-        mask = (
-            torch.BoolTensor(tokens > 0)
-            .unsqueeze(1)
-            .repeat(1, tokens.shape[1], 1)
-            .unsqueeze(1)
-            .to(self.device)
-        )
-
+    def forward(self, tokens):
+        token_type_ids = torch.zeros_like(tokens).to(self.device)
+        mask = (tokens > 0)
         output = self.bert(
             tokens,
-            labels=labels,
             attention_mask=mask,
             token_type_ids=token_type_ids,
         )

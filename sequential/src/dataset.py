@@ -68,16 +68,15 @@ class BERTTestDataset(Dataset):
         seq = seq + 1  # cos padding : 0
 
         tokens = list(seq)
+        tokens.append(self.num_item + 1)
         labels = [0 for _ in range(self.max_len)]
-
+        labels[-1] = target
+        
         tokens = tokens[-self.max_len :]
         mask_len = self.max_len - len(tokens)
 
         # padding
         tokens = [0] * mask_len + tokens
         labels = [0] * mask_len + labels
-
-        tokens.append(self.num_item + 1)
-        labels.append(target)
 
         return index, torch.tensor(tokens), torch.tensor(labels)

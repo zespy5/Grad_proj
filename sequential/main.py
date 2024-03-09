@@ -33,15 +33,15 @@ def main():
     pos_emb = False
     hidden_act = "gelu"
     ## TRAIN ##
-    lr = 0.0001
-    epoch = 50
+    lr = 0.00005
+    epoch = 70
     batch_size = 256
     ## DATA ##
     data_local = False
     dataset = "bert"
-    data_version = "a5074a0dd94780bb3d605d8d6714dd8ca4f8d90a"
+    data_version = "c069fcd43ee582269cb7273b31f21c1cc966909d"
     ## ETC ##
-    n_cuda = "0"
+    n_cuda = "1"
 
     ############ WANDB INIT #############
     print("--------------- Wandb SETTING ---------------")
@@ -52,21 +52,20 @@ def main():
         project="sequential",
         name=name,
     )
-    wandb.init(
-        config={
-            model_name: model_name,
-            hidden_size: hidden_size,
-            num_attention_heads: num_attention_heads,
-            num_hidden_layers: num_hidden_layers,
-            max_len: max_len,
-            dropout_prob: dropout_prob,
-            num_mlp_layers: num_mlp_layers,
-            pos_emb: pos_emb,
-            hidden_act: hidden_act,
-            lr: lr,
-            epoch: epoch,
-            batch_size: batch_size,
-            data_version: data_version,
+    wandb.log({
+            "model_name": model_name,
+            "hidden_size": hidden_size,
+            "num_attention_heads": num_attention_heads,
+            "num_hidden_layers": num_hidden_layers,
+            "max_len": max_len,
+            "dropout_prob": dropout_prob,
+            "num_mlp_layers": num_mlp_layers,
+            "pos_emb": pos_emb,
+            "hidden_act": hidden_act,
+            "lr": lr,
+            "epoch": epoch,
+            "batch_size": batch_size,
+            "data_version": data_version,
         },
     )
 
@@ -91,8 +90,8 @@ def main():
     train_dataset = torch.load(f"{path}/train_dataset_small.pt")
     valid_dataset = torch.load(f"{path}/valid_dataset_small.pt")
 
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, num_workers=8)
-    valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, num_workers=8)
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, num_workers=4)
+    valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, num_workers=4)
 
     ############# SETTING FOR TRAIN #############
     num_user = train_dataset.num_user
@@ -153,7 +152,7 @@ def main():
         print(f'EPOCH : {i+1} | TRAIN LOSS : {train_loss} | LR : {optimizer.param_groups[0]["lr"]}')
         wandb.log({"loss": train_loss, "epoch": i + 1, "lr": optimizer.param_groups[0]["lr"]})
 
-        if i % 3 == 0:
+        if i % 5 == 0:
             print("-------------VALID-------------")
             valid_loss, valid_metrics = eval(
                 model,
