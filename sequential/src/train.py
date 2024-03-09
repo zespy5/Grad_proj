@@ -73,8 +73,8 @@ def eval(
                     metrics["N" + str(k)].append(ndcg_at_k(k, labels[-1], sorted_item))
 
         for k in [10, 20, 40]:
-            metrics["R" + str(k)] = round(np.asarray(metrics["R" + str(k)]).mean(), 5)
-            metrics["N" + str(k)] = round(np.asarray(metrics["N" + str(k)]).mean(), 5)
+            metrics["R" + str(k)] = round(np.asarray(metrics["R" + str(k)]).mean(), 10)
+            metrics["N" + str(k)] = round(np.asarray(metrics["N" + str(k)]).mean(), 10)
 
         if mode == "valid":
             return total_loss / len(dataloader), metrics
