@@ -51,6 +51,8 @@ def main():
     wandb.init(
         project="sequential",
         name=name,
+    )
+    wandb.init(
         config={
             model_name: model_name,
             hidden_size: hidden_size,
