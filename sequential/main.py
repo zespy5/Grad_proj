@@ -23,7 +23,7 @@ def main():
 
     ############ SET HYPER PARAMS #############
     ## MODEL ##
-    model_name = "MLPBERT4Rec"
+    model_name = "BERT4Rec"
     hidden_size = 256
     num_attention_heads = 4
     num_hidden_layers = 3
@@ -87,7 +87,6 @@ def main():
         path = f"./data/{dataset}"
 
     print("-------------LOAD DATA-------------")
-    gen_img_emb = torch.load(f"{path}/gen_img_emb.pth")  # dim : ((num_item) * (512*3))
     used_items_each_user = load_pickle(f"{path}/pos_items_each_user_small.pkl")
     train_dataset = torch.load(f"{path}/train_dataset_small.pt")
     valid_dataset = torch.load(f"{path}/valid_dataset_small.pt")
@@ -99,10 +98,10 @@ def main():
     num_user = train_dataset.num_user
     num_item = train_dataset.num_item
     device = f"cuda:{n_cuda}" if torch.cuda.is_available() else "cpu"
-    gen_img_emb = gen_img_emb.to(device)
 
     ## MODEL INIT ##
     if model_name == "MLPBERT4Rec":
+        gen_img_emb = torch.load(f"{path}/gen_img_emb.pth")  # dim : ((num_item) * (512*3))
         model = MLPBERT4Rec(
             num_item,
             gen_img_emb,

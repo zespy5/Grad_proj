@@ -227,7 +227,7 @@ class MLPBERT4Rec(nn.Module):
         self.device = device
         self.pos_emb = pos_emb
         self.num_mlp_layers = num_mlp_layers
-        self.gen_img_emb = gen_img_emb  # (num_item) X (3*512)
+        self.gen_img_emb = gen_img_emb.to(self.device)  # (num_item) X (3*512)
 
         self.item_emb = nn.Embedding(num_item + 2, hidden_size, padding_idx=0)
         self.pos_emb = nn.Embedding(max_len, hidden_size)
