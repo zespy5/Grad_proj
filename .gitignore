@@ -1,0 +1,8 @@
+data
+wandb
+.vscode
+*.csv
+*.jpg
+*.DS_Store
+.env
+__pycache__/
