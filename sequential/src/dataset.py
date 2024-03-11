@@ -79,4 +79,4 @@ class BERTTestDataset(Dataset):
         tokens = [0] * mask_len + tokens
         labels = [0] * mask_len + labels
 
-        return index, torch.tensor(tokens), torch.tensor(labels)
+        return torch.tensor(tokens), torch.tensor(labels)
