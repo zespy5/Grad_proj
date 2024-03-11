@@ -64,7 +64,7 @@ class BERTTestDataset(Dataset):
 
     def __getitem__(self, index):
         seq = self.user_seq[index]
-        target = self.test_seq[index].item()
+        target = self.test_seq[index].item() + 1
         seq = seq + 1  # cos padding : 0
 
         tokens = list(seq)
