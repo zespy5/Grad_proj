@@ -24,25 +24,26 @@ def main():
     ############ SET HYPER PARAMS #############
     ## MODEL ##
     model_name = "BERT4Rec"
-    hidden_size = 256
+    hidden_size = 512
     num_attention_heads = 4
     num_hidden_layers = 3
-    max_len = 30
-    dropout_prob = 0.2
-    num_mlp_layers = 3
+    max_len = 50
+    dropout_prob = 0.25
+    num_mlp_layers = 2
     pos_emb = False
     hidden_act = "gelu"
+    num_gen_img = 1
     ## TRAIN ##
-    lr = 0.00005
-    epoch = 70
+    lr = 0.0001
+    epoch = 80
     batch_size = 256
-    weight_decay = 0.001
+    weight_decay = 0.01
     ## DATA ##
     data_local = False
     dataset = "bert"
-    data_version = "c069fcd43ee582269cb7273b31f21c1cc966909d"
+    data_version = "846eac5c742885ce41684da01af5382d54eb1b19"
     ## ETC ##
-    n_cuda = "1"
+    n_cuda = "0"
 
     ############ WANDB INIT #############
     print("--------------- Wandb SETTING ---------------")
@@ -53,11 +54,13 @@ def main():
         project="sequential",
         name=name,
     )
-    wandb.log({
+    wandb.log(
+        {
             "model_name": model_name,
             "hidden_size": hidden_size,
             "num_attention_heads": num_attention_heads,
             "num_hidden_layers": num_hidden_layers,
+            "num_gen_img": num_gen_img,
             "max_len": max_len,
             "dropout_prob": dropout_prob,
             "num_mlp_layers": num_mlp_layers,
@@ -65,6 +68,7 @@ def main():
             "hidden_act": hidden_act,
             "lr": lr,
             "epoch": epoch,
+            "weight_decay": weight_decay,
             "batch_size": batch_size,
             "data_version": data_version,
         },
@@ -101,7 +105,7 @@ def main():
 
     ## MODEL INIT ##
     if model_name == "MLPBERT4Rec":
-        gen_img_emb = torch.load(f"{path}/gen_img_emb.pth")  # dim : ((num_item) * (512*3))
+        gen_img_emb = torch.load(f"{path}/gen_img_emb_sep.pth")  # dim : ((num_item) * (512*3))
         model = MLPBERT4Rec(
             num_item,
             gen_img_emb,
@@ -109,6 +113,7 @@ def main():
             num_attention_heads,
             num_hidden_layers,
             hidden_act,
+            num_gen_img,
             max_len,
             dropout_prob,
             pos_emb,
@@ -161,7 +166,7 @@ def main():
                 valid_dataloader,
                 criterion,
                 num_item,
-                used_items_each_user,
+                None,
                 device,
             )
             print(f"EPOCH : {i+1} | VALID LOSS : {valid_loss}")
