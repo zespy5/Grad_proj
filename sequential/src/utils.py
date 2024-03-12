@@ -58,15 +58,18 @@ def ndcg_at_k(k, true, pred):
 
     return dcg / idcg
 
+
 def simple_recall_at_k(k, rank):
-    if rank <= k:
+    if rank < k:
         return 1
     return 0
 
+
 def simple_ndcg_at_k(k, rank):
-    if rank <= k:
+    if rank < k:
         return 1 / torch.log2(rank + 2)
     return 0
+
 
 def mk_dir(file_path):
     if not os.path.exists(file_path):

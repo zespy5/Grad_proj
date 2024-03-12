@@ -59,13 +59,13 @@ def eval(
             total_loss += loss.item()
 
             for i, label in enumerate(labels):
-                user_res = -logits[i, -1, 1:] # without zero(padding)
+                user_res = -logits[i, -1, 1:]  # without zero(padding)
                 target = label[-1]
-                item_rank = user_res.argsort().argsort() # get rank(start with 0~) of all items(id:idx = 1:0)
-                
+                item_rank = user_res.argsort().argsort()  # get rank(start with 0~) of all items(id:idx = 1:0)
+
                 for k in [10, 20, 40]:
-                    metrics["R" + str(k)].append(simple_recall_at_k(k, item_rank[target-1]+1))
-                    metrics["N" + str(k)].append(simple_ndcg_at_k(k, item_rank[target-1]+1))
+                    metrics["R" + str(k)].append(simple_recall_at_k(k, item_rank[target - 1]))
+                    metrics["N" + str(k)].append(simple_ndcg_at_k(k, item_rank[target - 1]))
 
         for k in [10, 20, 40]:
             metrics["R" + str(k)] = sum(metrics["R" + str(k)]) / len(metrics["R" + str(k)])
