@@ -1,4 +1,5 @@
 import math
+from random import sample
 
 import numpy as np
 import torch
@@ -126,7 +127,7 @@ class BERT4Rec(nn.Module):
         seqs = self.emb_layernorm(self.dropout(seqs))
 
         mask = (tokens > 0).unsqueeze(1).repeat(1, tokens.shape[1], 1).unsqueeze(1).to(self.device)
-        
+
         for block in self.bert:
             seqs, _ = block(seqs, mask)
 
@@ -148,7 +149,7 @@ class BERT4RecWithHF(nn.Module):
         device="cpu",
     ):
         super(BERT4RecWithHF, self).__init__()
-        
+
         self.num_items = num_items
         self.hidden_size = hidden_size
         self.hidden_act = hidden_act
@@ -181,7 +182,7 @@ class BERT4RecWithHF(nn.Module):
 
     def forward(self, tokens):
         token_type_ids = torch.zeros_like(tokens).to(self.device)
-        mask = (tokens > 0)
+        mask = tokens > 0
         output = self.bert(
             tokens,
             attention_mask=mask,
@@ -200,6 +201,7 @@ class MLPBERT4Rec(nn.Module):
         num_attention_heads=4,
         num_hidden_layers=3,
         hidden_act="gelu",
+        num_gen_img=1,
         max_len=30,
         dropout_prob=0.2,
         pos_emb=False,
@@ -215,6 +217,7 @@ class MLPBERT4Rec(nn.Module):
         self.device = device
         self.pos_emb = pos_emb
         self.num_mlp_layers = num_mlp_layers
+        self.num_gen_img = num_gen_img
         self.gen_img_emb = gen_img_emb.to(self.device)  # (num_item) X (3*512)
 
         self.item_emb = nn.Embedding(num_item + 2, hidden_size, padding_idx=0)
@@ -227,7 +230,7 @@ class MLPBERT4Rec(nn.Module):
         )
         # init MLP
         self.MLP_modules = []
-        in_size = self.hidden_size + self.gen_img_emb.shape[1]
+        in_size = self.hidden_size + self.gen_img_emb.shape[-1] * self.num_gen_img
 
         for _ in range(self.num_mlp_layers):
             self.MLP_modules.append(nn.Linear(in_size, in_size // 2))
@@ -252,7 +255,9 @@ class MLPBERT4Rec(nn.Module):
         mask_index = torch.where(item_ids == self.num_item + 1)  # mask 찾기
         item_ids[mask_index] = labels[mask_index]  # mask의 본래 아이템 번호 찾기
         # log_seq는 원래 아이템 id + 1 되어 있으므로 -1해서 인덱싱
-        mlp_in = torch.concat([seqs, self.gen_img_emb[item_ids - 1]], dim=-1)
+        img_idx = sample([0, 1, 2], k=self.num_gen_img)  # 생성형 이미지 추출
+        gen_imgs = torch.flatten(self.gen_img_emb[item_ids - 1][:, :, img_idx, :], start_dim=-2, end_dim=-1)
+        mlp_in = torch.concat([seqs, gen_imgs], dim=-1)
         out = self.out(self.MLP(mlp_in))
         return out
 
