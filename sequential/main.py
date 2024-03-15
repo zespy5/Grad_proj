@@ -35,16 +35,19 @@ def main():
     num_gen_img = 0
     mask_prob = 0.3
     categoty_clue = True
+
     ## TRAIN ##
     lr = 0.0001
     epoch = 120
     batch_size = 256
     weight_decay = 0.01
+
     ## DATA ##
     data_local = False
     data_repo = "bert"
     dataset = "small"
-    data_version = "1cfab1b354da9685652be383f9a641248904b4a7"
+    data_version = "493b547ccef51c42851b1fb42bf6931d11c8dcf7"
+
     ## ETC ##
     n_cuda = "3"
 
