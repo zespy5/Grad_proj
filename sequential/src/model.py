@@ -242,9 +242,10 @@ class MLPBERT4Rec(nn.Module):
 
     def forward(self, log_seqs, labels):
         seqs = self.item_emb(log_seqs).to(self.device)
-        # if self.pos_emb:
-        #     positions = np.tile(np.array(range(log_seqs.shape[1])), [log_seqs.shape[0], 1])
-        #     seqs += self.pos_emb(torch.tensor(positions).to(self.device))
+
+        if self.pos_emb:
+            positions = np.tile(np.array(range(log_seqs.shape[1])), [log_seqs.shape[0], 1])
+            seqs += self.pos_emb(torch.tensor(positions).to(self.device))
         seqs = self.emb_layernorm(self.dropout(seqs))
 
         mask = (log_seqs > 0).unsqueeze(1).repeat(1, log_seqs.shape[1], 1).unsqueeze(1).to(self.device)
