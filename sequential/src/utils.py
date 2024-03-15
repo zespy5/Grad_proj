@@ -63,4 +63,4 @@ def simple_ndcg_at_k(k, rank):
 
 def mk_dir(file_path):
     if not os.path.exists(file_path):
-        os.mkdir(file_path)
+        os.makedirs(file_path)
