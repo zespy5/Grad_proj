@@ -5,8 +5,8 @@ from torch.utils.data import Dataset
 
 
 class BERTDataset(Dataset):
-    def __init__(self, user_train, num_user, num_item, max_len: int = 30, mask_prob: float = 0.15) -> None:
-        self.user_train = user_train
+    def __init__(self, user_seq, num_user, num_item, max_len: int = 30, mask_prob: float = 0.15) -> None:
+        self.user_seq = user_seq
         self.num_user = num_user
         self.num_item = num_item
         self.max_len = max_len
@@ -16,8 +16,7 @@ class BERTDataset(Dataset):
         return self.num_user
 
     def __getitem__(self, index):
-        seq = self.user_train[index]
-        seq = seq + 1  # cos padding : 0,
+        seq = torch.tensor(self.user_seq[index], dtype=torch.long) + 1
         tokens = []
         labels = []
 
@@ -25,12 +24,9 @@ class BERTDataset(Dataset):
             prob = random.random()
             if prob < self.mask_prob:  # train
                 prob /= self.mask_prob
-
+                # mask_index: num_item + 1, 0: pad, 1~num_item: item index
                 if prob < 0.8:
-                    # masking
-                    tokens.append(
-                        self.num_item + 1
-                    )  # mask_index: num_item + 1, 0: pad, 1~num_item: item index
+                    tokens.append(self.num_item + 1)
                 elif prob < 0.9:
                     tokens.append(random.choice(range(1, self.num_item + 1)))
                 else:
@@ -48,13 +44,12 @@ class BERTDataset(Dataset):
         tokens = [0] * mask_len + tokens
         labels = [0] * mask_len + labels
 
-        return torch.tensor(tokens), torch.tensor(labels)
+        return torch.tensor(tokens, dtype=torch.long), torch.tensor(labels, dtype=torch.long)
 
 
 class BERTTestDataset(Dataset):
-    def __init__(self, user_seq, test_seq, num_user, num_item, max_len: int = 30) -> None:
+    def __init__(self, user_seq, num_user, num_item, max_len: int = 30) -> None:
         self.user_seq = user_seq
-        self.test_seq = test_seq
         self.num_user = num_user
         self.num_item = num_item
         self.max_len = max_len
@@ -63,20 +58,17 @@ class BERTTestDataset(Dataset):
         return self.num_user
 
     def __getitem__(self, index):
-        seq = self.user_seq[index]
-        target = self.test_seq[index].item() + 1
-        seq = seq + 1  # cos padding : 0
+        tokens = torch.tensor(self.user_seq[index], dtype=torch.long)
+        tokens = tokens + 1  # cos padding : 0
 
-        tokens = list(seq)
-        tokens.append(self.num_item + 1)
         labels = [0 for _ in range(self.max_len)]
-        labels[-1] = target
-        
+        labels[-1] = tokens[-1].item()  # target
+        tokens[-1] = self.num_item + 1  # masking
+
         tokens = tokens[-self.max_len :]
         mask_len = self.max_len - len(tokens)
 
         # padding
-        tokens = [0] * mask_len + tokens
-        labels = [0] * mask_len + labels
+        tokens = torch.concat((torch.zeros(mask_len, dtype=torch.long), tokens), dim=0)
 
-        return torch.tensor(tokens), torch.tensor(labels)
+        return index, tokens, torch.tensor(labels, dtype=torch.long)
