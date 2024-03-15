@@ -1,3 +1,4 @@
+import json
 import os
 import pickle
 import random
@@ -26,20 +27,10 @@ def get_config(path):
     return config
 
 
-def dump_pickle(data, path):
-    with open(path, "wb") as file:
-        pickle.dump(data, file)
-
-
-def load_pickle(path):
-    with open(path, "rb") as file:
-        data = pickle.load(file)
+def load_json(path):
+    with open(path, "r") as file:
+        data = json.load(file)
     return data
-
-
-def save_pt(data, path):
-    with open(path, "wb") as file:
-        torch.save(data, file)
 
 
 def recall_at_k(k, true, pred):
