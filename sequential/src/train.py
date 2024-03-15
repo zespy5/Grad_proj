@@ -32,36 +32,54 @@ def train(model, optimizer, scheduler, dataloader, criterion, device):
 
 
 def eval(
-    model,
-    mode,
-    dataloader,
-    criterion,
-    num_items,
-    used_items_each_user,
-    device,
+    model, mode, categoty_clue, dataloader, criterion, train_data, item_prod_type, items_by_prod_type, device
 ):
     model.eval()
     metrics = {"R10": [], "R20": [], "R40": [], "N10": [], "N20": [], "N40": []}
     total_loss = 0
-    all_items = np.arange(1, num_items + 1)
+    pred_list = []
+    all_items = np.arange(0, model.num_item)
 
     with torch.no_grad():
-        for tokens, labels in tqdm(dataloader):
+        for idx, (users, tokens, labels) in enumerate(tqdm(dataloader)):
             tokens = tokens.to(device)
             labels = labels.to(device)
+            users = users.to(device)
+            pred_list = []
 
             if isinstance(model, (MLPBERT4Rec)):
                 logits = model(tokens, labels)
             if isinstance(model, (BERT4Rec, BERT4RecWithHF)):
                 logits = model(tokens)
 
-            loss = criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
-            total_loss += loss.item()
+            if mode == "valid":
+                loss = criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
+                total_loss += loss.item()
 
-            for i, label in enumerate(labels):
-                user_res = -logits[i, -1, 1:]  # without zero(padding)
-                target = label[-1]
-                item_rank = user_res.argsort().argsort()  # get rank(start with 0~) of all items(id:idx = 1:0)
+            for user in users:
+                user = user.item()
+                used_items = torch.tensor(train_data[user]).unique()
+                u = user - idx * dataloader.batch_size
+
+                target = labels[u, -1]
+                user_res = -logits[u, -1, 1:]  # without zero(padding), itme start with 0
+                user_res[used_items] = (user_res.max()) + 1  # for remove used items
+
+                if categoty_clue and (not model.num_gen_img):
+                    # for remove other category items
+                    other_prod_type = torch.tensor(
+                        np.setdiff1d(all_items, items_by_prod_type[item_prod_type[target - 1]])
+                    ).to(device)
+                    user_res[other_prod_type] = user_res.max()
+
+                # sorted item id e.g. [3452(1st), 7729(2nd), ... ]
+                item_rank = user_res.argsort()
+
+                if mode == "test":
+                    pred_list.append(item_rank[:40].tolist() + [target])
+
+                # rank of items e.g. index: item_id(0~), item_rank[0] : rank of item_id 0
+                item_rank = item_rank.argsort()
 
                 for k in [10, 20, 40]:
                     metrics["R" + str(k)].append(simple_recall_at_k(k, item_rank[target - 1]))
@@ -73,4 +91,4 @@ def eval(
 
         if mode == "valid":
             return total_loss / len(dataloader), metrics
-    return metrics
+    return pred_list, metrics
