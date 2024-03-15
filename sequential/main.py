@@ -8,7 +8,7 @@ from huggingface_hub import snapshot_download
 from src.dataset import BERTDataset, BERTTestDataset
 from src.model import BERT4Rec, BERT4RecWithHF, MLPBERT4Rec
 from src.train import eval, train
-from src.utils import get_timestamp, load_pickle, mk_dir, seed_everything
+from src.utils import get_timestamp, load_json, mk_dir, seed_everything
 from torch.optim import Adam, lr_scheduler
 from torch.utils.data import DataLoader
 
@@ -23,34 +23,37 @@ def main():
 
     ############ SET HYPER PARAMS #############
     ## MODEL ##
-    model_name = "BERT4Rec"
-    hidden_size = 512
+    model_name = "MLPBERT4Rec"
+    hidden_size = 256
     num_attention_heads = 4
-    num_hidden_layers = 3
+    num_hidden_layers = 2
     max_len = 50
     dropout_prob = 0.25
-    num_mlp_layers = 2
+    num_mlp_layers = 1
     pos_emb = False
     hidden_act = "gelu"
-    num_gen_img = 1
+    num_gen_img = 0
+    mask_prob = 0.3
+    categoty_clue = True
     ## TRAIN ##
     lr = 0.0001
-    epoch = 80
+    epoch = 120
     batch_size = 256
     weight_decay = 0.01
     ## DATA ##
     data_local = False
-    dataset = "bert"
-    data_version = "846eac5c742885ce41684da01af5382d54eb1b19"
+    data_repo = "bert"
+    dataset = "small"
+    data_version = "1cfab1b354da9685652be383f9a641248904b4a7"
     ## ETC ##
-    n_cuda = "0"
+    n_cuda = "3"
 
     ############ WANDB INIT #############
     print("--------------- Wandb SETTING ---------------")
     dotenv.load_dotenv()
     WANDB_API_KEY = os.environ.get("WANDB_API_KEY")
     wandb.login(key=WANDB_API_KEY)
-    wandb.init(
+    run = wandb.init(
         project="sequential",
         name=name,
     )
@@ -61,6 +64,8 @@ def main():
             "num_attention_heads": num_attention_heads,
             "num_hidden_layers": num_hidden_layers,
             "num_gen_img": num_gen_img,
+            "mask_prob": mask_prob,
+            "categoty_clue": categoty_clue,
             "max_len": max_len,
             "dropout_prob": dropout_prob,
             "num_mlp_layers": num_mlp_layers,
@@ -79,7 +84,7 @@ def main():
     if not data_local:
         path = (
             snapshot_download(
-                repo_id="SLKpnu/HandM_Dataset",
+                repo_id=f"SLKpnu/{data_repo}",
                 repo_type="dataset",
                 cache_dir="./data",
                 revision=data_version,
@@ -91,21 +96,30 @@ def main():
         path = f"./data/{dataset}"
 
     print("-------------LOAD DATA-------------")
-    used_items_each_user = load_pickle(f"{path}/pos_items_each_user_small.pkl")
-    train_dataset = torch.load(f"{path}/train_dataset_small.pt")
-    valid_dataset = torch.load(f"{path}/valid_dataset_small.pt")
+    metadata = load_json(f"{path}/metadata.json")
+    item_prod_type = torch.load(f"{path}/item_with_prod_type.pt")  # {item_id : prod_typr}
+    items_by_prod_type = torch.load(f"{path}/items_by_prod_type.pt")  # {prod_type : [item_ids]}
+    train_data = torch.load(f"{path}/train_data.pt")
+    valid_data = torch.load(f"{path}/valid_data.pt")
+    test_data = torch.load(f"{path}/test_data.pt")
+
+    num_user = metadata["num of user"]
+    num_item = metadata["num of item"]
+
+    train_dataset = BERTDataset(train_data, num_user, num_item, max_len, mask_prob)
+    valid_dataset = BERTTestDataset(valid_data, num_user, num_item, max_len)
+    test_dataset = BERTTestDataset(test_data, num_user, num_item, max_len)
 
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, num_workers=4)
     valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, num_workers=4)
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, num_workers=4)
 
     ############# SETTING FOR TRAIN #############
-    num_user = train_dataset.num_user
-    num_item = train_dataset.num_item
     device = f"cuda:{n_cuda}" if torch.cuda.is_available() else "cpu"
 
     ## MODEL INIT ##
     if model_name == "MLPBERT4Rec":
-        gen_img_emb = torch.load(f"{path}/gen_img_emb_sep.pth")  # dim : ((num_item) * (512*3))
+        gen_img_emb = torch.load(f"{path}/gen_img_emb.pt")  # dim : ((num_item)*512*3)
         model = MLPBERT4Rec(
             num_item,
             gen_img_emb,
@@ -163,10 +177,12 @@ def main():
             valid_loss, valid_metrics = eval(
                 model,
                 "valid",
+                categoty_clue,
                 valid_dataloader,
                 criterion,
-                num_item,
-                None,
+                train_data,
+                item_prod_type,
+                items_by_prod_type,
                 device,
             )
             print(f"EPOCH : {i+1} | VALID LOSS : {valid_loss}")
@@ -185,6 +201,26 @@ def main():
                     "valid_N40": valid_metrics["N40"],
                 }
             )
+
+    print("-------------EVAL-------------")
+    pred_list, test_metrics = eval(
+        model,
+        "test",
+        categoty_clue,
+        test_dataloader,
+        criterion,
+        train_data,
+        item_prod_type,
+        items_by_prod_type,
+        device,
+    )
+    print(
+        f'R10 : {test_metrics["R10"]} | R20 : {test_metrics["R20"]} | R40 : {test_metrics["R40"]} | N10 : {test_metrics["N10"]} | N20 : {test_metrics["N20"]} | N40 : {test_metrics["N40"]}'
+    )
+    wandb.log(test_metrics)
+    mk_dir(f"./model/{timestamp}")
+    torch.save(pred_list, f"./model/{timestamp}/prediction.pt")
+    wandb.save(f"./model/{timestamp}/prediction.pt")
 
     ############ WANDB FINISH #############
     wandb.finish()
