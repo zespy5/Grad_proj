@@ -44,9 +44,9 @@ def main():
 
     ## DATA ##
     data_local = False
-    data_repo = "bert"
+    data_repo = "sequential"
     dataset = "small"
-    data_version = "493b547ccef51c42851b1fb42bf6931d11c8dcf7"
+    data_version = "4c61bc94e8367e4aca8efb96512cce74823e9124"
 
     ## ETC ##
     n_cuda = "3"
