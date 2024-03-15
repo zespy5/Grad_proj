@@ -34,7 +34,7 @@ def main():
     hidden_act = "gelu"
     num_gen_img = 0
     mask_prob = 0.3
-    categoty_clue = True
+    category_clue = True
 
     ## TRAIN ##
     lr = 0.0001
@@ -68,7 +68,7 @@ def main():
             "num_hidden_layers": num_hidden_layers,
             "num_gen_img": num_gen_img,
             "mask_prob": mask_prob,
-            "categoty_clue": categoty_clue,
+            "category_clue": category_clue,
             "max_len": max_len,
             "dropout_prob": dropout_prob,
             "num_mlp_layers": num_mlp_layers,
@@ -180,7 +180,7 @@ def main():
             valid_loss, valid_metrics = eval(
                 model,
                 "valid",
-                categoty_clue,
+                category_clue,
                 valid_dataloader,
                 criterion,
                 train_data,
@@ -209,7 +209,7 @@ def main():
     pred_list, test_metrics = eval(
         model,
         "test",
-        categoty_clue,
+        category_clue,
         test_dataloader,
         criterion,
         train_data,

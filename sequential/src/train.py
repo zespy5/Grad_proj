@@ -32,7 +32,7 @@ def train(model, optimizer, scheduler, dataloader, criterion, device):
 
 
 def eval(
-    model, mode, categoty_clue, dataloader, criterion, train_data, item_prod_type, items_by_prod_type, device
+    model, mode, category_clue, dataloader, criterion, train_data, item_prod_type, items_by_prod_type, device
 ):
     model.eval()
     metrics = {"R10": [], "R20": [], "R40": [], "N10": [], "N20": [], "N40": []}
@@ -65,7 +65,7 @@ def eval(
                 user_res = -logits[u, -1, 1:]  # without zero(padding), itme start with 0
                 user_res[used_items] = (user_res.max()) + 1  # for remove used items
 
-                if categoty_clue and (not model.num_gen_img):
+                if category_clue and (not model.num_gen_img):
                     # for remove other category items
                     other_prod_type = torch.tensor(
                         np.setdiff1d(all_items, items_by_prod_type[item_prod_type[target - 1]])
