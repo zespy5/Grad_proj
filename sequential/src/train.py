@@ -61,16 +61,16 @@ def eval(
                 used_items = torch.tensor(train_data[user]).unique()
                 u = user - idx * dataloader.batch_size
 
-                target = labels[u, -1]
+                target = labels[u, -1].item()
                 user_res = -logits[u, -1, 1:]  # without zero(padding), itme start with 0
                 user_res[used_items] = (user_res.max()) + 1  # for remove used items
 
                 if category_clue and (not model.num_gen_img):
-                    # for remove other category items
-                    other_prod_type = torch.tensor(
-                        np.setdiff1d(all_items, items_by_prod_type[item_prod_type[target - 1]])
-                    ).to(device)
-                    user_res[other_prod_type] = user_res.max()
+                    mask = torch.ones_like(user_res, dtype=torch.bool).to(device)
+                    # exclude same category items from index list
+                    mask[items_by_prod_type[item_prod_type[target - 1]]] = False
+                    # remove other category items
+                    user_res[mask] = user_res.max()
 
                 # sorted item id e.g. [3452(1st), 7729(2nd), ... ]
                 item_rank = user_res.argsort()
