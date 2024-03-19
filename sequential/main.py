@@ -129,6 +129,7 @@ def main():
             num_item,
             gen_img_emb,
             num_cat,
+            item_prod_type,
             hidden_size,
             num_attention_heads,
             num_hidden_layers,
