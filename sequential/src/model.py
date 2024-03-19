@@ -67,16 +67,16 @@ class PositionwiseFeedForward(nn.Module):
         self.dropout = nn.Dropout(dropout_prob)
         self.layerNorm = nn.LayerNorm(hidden_size, 1e-6)
 
-        if self.hidden_act == "gelu":
+        if hidden_act == "gelu":
             self.activate = F.gelu
-        if self.hidden_act == "mish":
+        if hidden_act == "mish":
             self.activate = F.mish
-        if self.hidden_act == "silu":
+        if hidden_act == "silu":
             self.activate = F.silu
 
     def forward(self, x):
         residual = x
-        output = self.W_2(self.hidden_act(self.dropout(self.W_1(x))))
+        output = self.W_2(self.activate(self.dropout(self.W_1(x))))
         output = self.layerNorm(self.dropout(output) + residual)
         return output
 
