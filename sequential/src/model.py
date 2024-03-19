@@ -197,6 +197,8 @@ class MLPBERT4Rec(nn.Module):
         self,
         num_item,
         gen_img_emb,
+        num_cat,
+        item_prod_type,
         hidden_size=256,
         num_attention_heads=4,
         num_hidden_layers=3,
@@ -205,25 +207,33 @@ class MLPBERT4Rec(nn.Module):
         max_len=30,
         dropout_prob=0.2,
         pos_emb=False,
+        cat_emb=False,
         num_mlp_layers=2,
         device="cpu",
     ):
         super(MLPBERT4Rec, self).__init__()
 
         self.num_item = num_item
+        self.num_cat = num_cat
         self.hidden_size = hidden_size
         self.num_attention_heads = num_attention_heads
         self.num_hidden_layers = num_hidden_layers
         self.device = device
         self.pos_emb = pos_emb
+        self.cat_emb = cat_emb
         self.num_mlp_layers = num_mlp_layers
         self.num_gen_img = num_gen_img
         self.gen_img_emb = gen_img_emb.to(self.device)  # (num_item) X (3*512)
+        self.item_prod_type = item_prod_type.to(self.device)  # [item_id : category]
 
         self.item_emb = nn.Embedding(num_item + 2, hidden_size, padding_idx=0)
-        self.positional_emb = nn.Embedding(max_len, hidden_size)
         self.dropout = nn.Dropout(dropout_prob)
         self.emb_layernorm = nn.LayerNorm(hidden_size, eps=1e-6)
+
+        if self.pos_emb:
+            self.positional_emb = nn.Embedding(max_len, hidden_size)
+        if self.cat_emb:
+            self.category_emb = nn.Embedding(num_cat, hidden_size)
 
         self.bert = nn.ModuleList(
             [BERT4RecBlock(num_attention_heads, hidden_size, dropout_prob) for _ in range(num_hidden_layers)]
@@ -246,9 +256,12 @@ class MLPBERT4Rec(nn.Module):
         if self.pos_emb:
             positions = np.tile(np.array(range(log_seqs.shape[1])), [log_seqs.shape[0], 1])
             seqs += self.positional_emb(torch.tensor(positions).to(self.device))
-        seqs = self.emb_layernorm(self.dropout(seqs))
+        if self.cat_emb:
+            seqs += self.category_emb(self.item_prod_type[log_seqs])
 
+        seqs = self.emb_layernorm(self.dropout(seqs))
         mask = (log_seqs > 0).unsqueeze(1).repeat(1, log_seqs.shape[1], 1).unsqueeze(1).to(self.device)
+
         for block in self.bert:
             seqs, _ = block(seqs, mask)
 

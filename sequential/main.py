@@ -31,6 +31,7 @@ def main():
     dropout_prob = 0.2
     num_mlp_layers = 3
     pos_emb = False
+    cat_emb = False
     hidden_act = "gelu"
     num_gen_img = 2
     mask_prob = 0.3
@@ -46,7 +47,7 @@ def main():
     data_local = False
     data_repo = "sequential"
     dataset = "small"
-    data_version = "4c61bc94e8367e4aca8efb96512cce74823e9124"
+    data_version = "458a05aeec7ef122d343834a9c5dd66f1c75b8a0"
 
     ## ETC ##
     n_cuda = "1"
@@ -100,14 +101,15 @@ def main():
 
     print("-------------LOAD DATA-------------")
     metadata = load_json(f"{path}/metadata.json")
-    item_prod_type = torch.load(f"{path}/item_with_prod_type.pt")  # {item_id : prod_typr}
-    items_by_prod_type = torch.load(f"{path}/items_by_prod_type.pt")  # {prod_type : [item_ids]}
+    item_prod_type = torch.load(f"{path}/item_with_prod_type_idx.pt")  # tensor(prod_type_idx), index : item_idx
+    items_by_prod_type = torch.load(f"{path}/items_by_prod_type_idx.pt")  # {prod_type_idx : tensor(item_ids)}
     train_data = torch.load(f"{path}/train_data.pt")
     valid_data = torch.load(f"{path}/valid_data.pt")
     test_data = torch.load(f"{path}/test_data.pt")
 
     num_user = metadata["num of user"]
     num_item = metadata["num of item"]
+    num_cat = len(items_by_prod_type)
 
     train_dataset = BERTDataset(train_data, num_user, num_item, max_len, mask_prob)
     valid_dataset = BERTTestDataset(valid_data, num_user, num_item, max_len)
@@ -126,6 +128,7 @@ def main():
         model = MLPBERT4Rec(
             num_item,
             gen_img_emb,
+            num_cat,
             hidden_size,
             num_attention_heads,
             num_hidden_layers,
@@ -134,6 +137,7 @@ def main():
             max_len,
             dropout_prob,
             pos_emb,
+            cat_emb,
             num_mlp_layers,
             device,
         ).to(device)
