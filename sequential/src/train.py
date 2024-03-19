@@ -76,7 +76,7 @@ def eval(
                 if category_clue and (not num_gen_img):
                     mask = torch.ones_like(user_res, dtype=torch.bool).to(device)
                     # exclude same category items from index list
-                    mask[items_by_prod_type[item_prod_type[target - 1]]] = False
+                    mask[items_by_prod_type[item_prod_type[target - 1].item()]] = False
                     # remove other category items
                     user_res[mask] = user_res.max()
 

@@ -275,26 +275,30 @@ class MLPBERT4Rec(nn.Module):
 
     def forward(self, log_seqs, labels):
         seqs = self.item_emb(log_seqs).to(self.device)
+        mask = (log_seqs > 0).unsqueeze(1).repeat(1, log_seqs.shape[1], 1).unsqueeze(1).to(self.device)
+
+        if self.cat_emb or self.num_gen_img:
+            item_ids = log_seqs.clone().detach()
+            mask_index = torch.where(item_ids == self.num_item + 1)  # mask 찾기
+            item_ids[mask_index] = labels[mask_index]  # mask의 본래 아이템 번호 찾기
 
         if self.pos_emb:
             positions = np.tile(np.array(range(log_seqs.shape[1])), [log_seqs.shape[0], 1])
             seqs += self.positional_emb(torch.tensor(positions).to(self.device))
         if self.cat_emb:
-            seqs += self.category_emb(self.item_prod_type[log_seqs])
+            seqs += self.category_emb(self.item_prod_type[item_ids - 1])
 
         seqs = self.emb_layernorm(self.dropout(seqs))
-        mask = (log_seqs > 0).unsqueeze(1).repeat(1, log_seqs.shape[1], 1).unsqueeze(1).to(self.device)
 
         for block in self.bert:
             seqs, _ = block(seqs, mask)
+        mlp_in = seqs
 
-        item_ids = log_seqs.clone().detach()
-        mask_index = torch.where(item_ids == self.num_item + 1)  # mask 찾기
-        item_ids[mask_index] = labels[mask_index]  # mask의 본래 아이템 번호 찾기
-        # log_seq는 원래 아이템 id + 1 되어 있으므로 -1해서 인덱싱
-        img_idx = sample([0, 1, 2], k=self.num_gen_img)  # 생성형 이미지 추출
-        gen_imgs = torch.flatten(self.gen_img_emb[item_ids - 1][:, :, img_idx, :], start_dim=-2, end_dim=-1)
-        mlp_in = torch.concat([seqs, gen_imgs], dim=-1)
+        if self.num_gen_img:
+            img_idx = sample([0, 1, 2], k=self.num_gen_img)  # 생성형 이미지 추출
+            gen_imgs = torch.flatten(self.gen_img_emb[item_ids - 1][:, :, img_idx, :], start_dim=-2, end_dim=-1)
+            mlp_in = torch.concat([mlp_in, gen_imgs], dim=-1)
+
         out = self.out(self.MLP(mlp_in))
         return out
 
