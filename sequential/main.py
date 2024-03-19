@@ -24,22 +24,22 @@ def main():
     ############ SET HYPER PARAMS #############
     ## MODEL ##
     model_name = "MLPBERT4Rec"
-    hidden_size = 1024
+    hidden_size = 32
     num_attention_heads = 4
     num_hidden_layers = 4
     max_len = 40
     dropout_prob = 0.2
     num_mlp_layers = 3
     pos_emb = False
-    cat_emb = False
+    cat_emb = True
     hidden_act = "gelu"
-    num_gen_img = 2
+    num_gen_img = 0
     mask_prob = 0.3
     category_clue = True
 
     ## TRAIN ##
     lr = 0.005
-    epoch = 60
+    epoch = 2
     batch_size = 256
     weight_decay = 0.001
 
@@ -47,7 +47,7 @@ def main():
     data_local = False
     data_repo = "sequential"
     dataset = "small"
-    data_version = "458a05aeec7ef122d343834a9c5dd66f1c75b8a0"
+    data_version = "f87d82148a32fb66f74dc2dfea9e3cf477838c91"
 
     ## ETC ##
     n_cuda = "1"
@@ -74,6 +74,7 @@ def main():
             "dropout_prob": dropout_prob,
             "num_mlp_layers": num_mlp_layers,
             "pos_emb": pos_emb,
+            "cat_emb": cat_emb,
             "hidden_act": hidden_act,
             "lr": lr,
             "epoch": epoch,
