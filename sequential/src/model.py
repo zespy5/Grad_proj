@@ -109,7 +109,7 @@ class BERT4Rec(nn.Module):
         self.device = device
 
         self.item_emb = nn.Embedding(num_item + 2, hidden_size, padding_idx=0)
-        self.pos_emb = nn.Embedding(max_len, hidden_size)
+        self.positional_emb = nn.Embedding(max_len, hidden_size)
         self.dropout = nn.Dropout(dropout_prob)
         self.emb_layernorm = nn.LayerNorm(hidden_size, eps=1e-6)
 
@@ -123,7 +123,7 @@ class BERT4Rec(nn.Module):
         seqs = self.item_emb(tokens).to(self.device)
         if self.pos_emb:
             positions = np.tile(np.array(range(tokens.shape[1])), [tokens.shape[0], 1])
-            seqs += self.pos_emb(torch.tensor(positions).to(self.device))
+            seqs += self.positional_emb(torch.tensor(positions).to(self.device))
         seqs = self.emb_layernorm(self.dropout(seqs))
 
         mask = (tokens > 0).unsqueeze(1).repeat(1, tokens.shape[1], 1).unsqueeze(1).to(self.device)
@@ -221,7 +221,7 @@ class MLPBERT4Rec(nn.Module):
         self.gen_img_emb = gen_img_emb.to(self.device)  # (num_item) X (3*512)
 
         self.item_emb = nn.Embedding(num_item + 2, hidden_size, padding_idx=0)
-        self.pos_emb = nn.Embedding(max_len, hidden_size)
+        self.positional_emb = nn.Embedding(max_len, hidden_size)
         self.dropout = nn.Dropout(dropout_prob)
         self.emb_layernorm = nn.LayerNorm(hidden_size, eps=1e-6)
 
@@ -245,7 +245,7 @@ class MLPBERT4Rec(nn.Module):
 
         if self.pos_emb:
             positions = np.tile(np.array(range(log_seqs.shape[1])), [log_seqs.shape[0], 1])
-            seqs += self.pos_emb(torch.tensor(positions).to(self.device))
+            seqs += self.positional_emb(torch.tensor(positions).to(self.device))
         seqs = self.emb_layernorm(self.dropout(seqs))
 
         mask = (log_seqs > 0).unsqueeze(1).repeat(1, log_seqs.shape[1], 1).unsqueeze(1).to(self.device)
