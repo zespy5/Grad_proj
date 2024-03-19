@@ -24,23 +24,23 @@ def main():
     ############ SET HYPER PARAMS #############
     ## MODEL ##
     model_name = "MLPBERT4Rec"
-    hidden_size = 256
+    hidden_size = 1024
     num_attention_heads = 4
-    num_hidden_layers = 2
-    max_len = 50
-    dropout_prob = 0.25
-    num_mlp_layers = 1
+    num_hidden_layers = 4
+    max_len = 40
+    dropout_prob = 0.2
+    num_mlp_layers = 3
     pos_emb = False
     hidden_act = "gelu"
-    num_gen_img = 0
+    num_gen_img = 2
     mask_prob = 0.3
     category_clue = True
 
     ## TRAIN ##
-    lr = 0.0001
-    epoch = 120
+    lr = 0.005
+    epoch = 60
     batch_size = 256
-    weight_decay = 0.01
+    weight_decay = 0.001
 
     ## DATA ##
     data_local = False
@@ -49,7 +49,7 @@ def main():
     data_version = "4c61bc94e8367e4aca8efb96512cce74823e9124"
 
     ## ETC ##
-    n_cuda = "3"
+    n_cuda = "1"
 
     ############ WANDB INIT #############
     print("--------------- Wandb SETTING ---------------")
@@ -181,6 +181,7 @@ def main():
                 model,
                 "valid",
                 category_clue,
+                num_gen_img,
                 valid_dataloader,
                 criterion,
                 train_data,
@@ -210,6 +211,7 @@ def main():
         model,
         "test",
         category_clue,
+        num_gen_img,
         test_dataloader,
         criterion,
         train_data,

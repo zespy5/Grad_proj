@@ -32,13 +32,21 @@ def train(model, optimizer, scheduler, dataloader, criterion, device):
 
 
 def eval(
-    model, mode, category_clue, dataloader, criterion, train_data, item_prod_type, items_by_prod_type, device
+    model,
+    mode,
+    category_clue,
+    num_gen_img,
+    dataloader,
+    criterion,
+    train_data,
+    item_prod_type,
+    items_by_prod_type,
+    device,
 ):
     model.eval()
     metrics = {"R10": [], "R20": [], "R40": [], "N10": [], "N20": [], "N40": []}
     total_loss = 0
     pred_list = []
-    all_items = np.arange(0, model.num_item)
 
     with torch.no_grad():
         for idx, (users, tokens, labels) in enumerate(tqdm(dataloader)):
@@ -65,7 +73,7 @@ def eval(
                 user_res = -logits[u, -1, 1:]  # without zero(padding), itme start with 0
                 user_res[used_items] = (user_res.max()) + 1  # for remove used items
 
-                if category_clue and (not model.num_gen_img):
+                if category_clue and (not num_gen_img):
                     mask = torch.ones_like(user_res, dtype=torch.bool).to(device)
                     # exclude same category items from index list
                     mask[items_by_prod_type[item_prod_type[target - 1]]] = False
