@@ -55,10 +55,18 @@ def simple_recall_at_k(k, rank):
     return 0
 
 
+def simple_recall_at_k_batch(k, rank):
+    return (rank < k).int()
+
+
 def simple_ndcg_at_k(k, rank):
     if rank < k:
         return 1 / torch.log2(rank + 2)
     return 0
+
+
+def simple_ndcg_at_k_batch(k, rank):
+    return torch.where(rank < k, 1 / torch.log2(rank + 2), torch.tensor(0.0))
 
 
 def mk_dir(file_path):
