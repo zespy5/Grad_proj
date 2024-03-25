@@ -220,6 +220,9 @@ class MLPBERT4Rec(nn.Module):
         pos_emb=False,
         cat_emb=False,
         mlp_cat=False,
+        img_noise=False,
+        mean=0,
+        std=1,
         num_mlp_layers=2,
         device="cpu",
     ):
@@ -235,6 +238,9 @@ class MLPBERT4Rec(nn.Module):
         self.pos_emb = pos_emb
         self.cat_emb = cat_emb
         self.mlp_cat = mlp_cat
+        self.img_noise = img_noise
+        self.std = std
+        self.mean = mean
         self.num_mlp_layers = num_mlp_layers
         self.num_gen_img = num_gen_img
         self.gen_img_emb = gen_img_emb.to(self.device) if self.num_gen_img else gen_img_emb  # (num_item) X (3*512)
@@ -299,6 +305,8 @@ class MLPBERT4Rec(nn.Module):
         if self.num_gen_img:
             img_idx = sample([0, 1, 2], k=self.num_gen_img)  # 생성형 이미지 추출
             gen_imgs = torch.flatten(self.gen_img_emb[item_ids - 1][:, :, img_idx, :], start_dim=-2, end_dim=-1)
+            if self.img_noise:
+                gen_imgs += torch.randn_like(gen_imgs) * self.std + self.mean
             mlp_in = torch.concat([mlp_in, gen_imgs], dim=-1)
 
         if self.mlp_cat:

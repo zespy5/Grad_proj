@@ -32,14 +32,17 @@ def main():
     num_mlp_layers = 3
     pos_emb = True
     cat_emb = False
-    mlp_cat = True
+    mlp_cat = False
+    img_noise = True
+    std = 4
+    mean = 1
     hidden_act = "gelu"
-    num_gen_img = 0
+    num_gen_img = 2
     mask_prob = 0.4
     category_clue = False
 
     ## TRAIN ##
-    lr = 0.005
+    lr = 0.001
     epoch = 60
     batch_size = 128
     weight_decay = 0.001
@@ -51,7 +54,7 @@ def main():
     data_version = "f87d82148a32fb66f74dc2dfea9e3cf477838c91"
 
     ## ETC ##
-    n_cuda = "1"
+    n_cuda = "3"
 
     ############ WANDB INIT #############
     print("--------------- Wandb SETTING ---------------")
@@ -77,6 +80,9 @@ def main():
             "pos_emb": pos_emb,
             "cat_emb": cat_emb,
             "mlp_cat": mlp_cat,
+            "img_noise": img_noise,
+            "std": std,
+            "mean": mean,
             "hidden_act": hidden_act,
             "lr": lr,
             "epoch": epoch,
@@ -129,22 +135,25 @@ def main():
     if model_name == "MLPBERT4Rec":
         gen_img_emb = torch.load(f"{path}/gen_img_emb.pt")  # dim : ((num_item)*512*3)
         model = MLPBERT4Rec(
-            num_item,
-            gen_img_emb,
-            num_cat,
-            item_prod_type,
-            hidden_size,
-            num_attention_heads,
-            num_hidden_layers,
-            hidden_act,
-            num_gen_img,
-            max_len,
-            dropout_prob,
-            pos_emb,
-            cat_emb,
-            mlp_cat,
-            num_mlp_layers,
-            device,
+            num_item=num_item,
+            gen_img_emb=gen_img_emb,
+            num_cat=num_cat,
+            item_prod_type=item_prod_type,
+            hidden_size=hidden_size,
+            num_attention_heads=num_attention_heads,
+            num_hidden_layers=num_hidden_layers,
+            hidden_act=hidden_act,
+            num_gen_img=num_gen_img,
+            max_len=max_len,
+            dropout_prob=dropout_prob,
+            pos_emb=pos_emb,
+            cat_emb=cat_emb,
+            mlp_cat=mlp_cat,
+            img_noise=img_noise,
+            mean=mean,
+            std=std,
+            num_mlp_layers=num_mlp_layers,
+            device=device,
         ).to(device)
 
     if model_name == "BERT4Rec":
