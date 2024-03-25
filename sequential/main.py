@@ -24,23 +24,24 @@ def main():
     ############ SET HYPER PARAMS #############
     ## MODEL ##
     model_name = "MLPBERT4Rec"
-    hidden_size = 32
+    hidden_size = 256
     num_attention_heads = 4
     num_hidden_layers = 4
-    max_len = 40
+    max_len = 90
     dropout_prob = 0.2
     num_mlp_layers = 3
-    pos_emb = False
-    cat_emb = True
+    pos_emb = True
+    cat_emb = False
+    mlp_cat = True
     hidden_act = "gelu"
     num_gen_img = 0
-    mask_prob = 0.3
-    category_clue = True
+    mask_prob = 0.4
+    category_clue = False
 
     ## TRAIN ##
     lr = 0.005
-    epoch = 2
-    batch_size = 256
+    epoch = 60
+    batch_size = 128
     weight_decay = 0.001
 
     ## DATA ##
@@ -75,6 +76,7 @@ def main():
             "num_mlp_layers": num_mlp_layers,
             "pos_emb": pos_emb,
             "cat_emb": cat_emb,
+            "mlp_cat": mlp_cat,
             "hidden_act": hidden_act,
             "lr": lr,
             "epoch": epoch,
@@ -140,6 +142,7 @@ def main():
             dropout_prob,
             pos_emb,
             cat_emb,
+            mlp_cat,
             num_mlp_layers,
             device,
         ).to(device)
