@@ -6,7 +6,7 @@ import torch.nn as nn
 import wandb
 from huggingface_hub import snapshot_download
 from src.dataset import BERTDataset, BERTTestDataset
-from src.model import BERT4Rec, BERT4RecWithHF, MLPBERT4Rec
+from src.model import BERT4Rec, BERT4RecWithHF, MLPBERT4Rec, MLPRec
 from src.train import eval, train
 from src.utils import get_timestamp, load_json, mk_dir, seed_everything
 from torch.optim import Adam, lr_scheduler
@@ -23,7 +23,7 @@ def main():
 
     ############ SET HYPER PARAMS #############
     ## MODEL ##
-    model_name = "MLPBERT4Rec"
+    model_name = "MLPRec"
     hidden_size = 256
     num_attention_heads = 4
     num_hidden_layers = 4
@@ -34,10 +34,10 @@ def main():
     cat_emb = False
     mlp_cat = False
     img_noise = True
-    std = 4
-    mean = 1
+    std = 0
+    mean = 0
     hidden_act = "gelu"
-    num_gen_img = 2
+    num_gen_img = 3
     mask_prob = 0.4
     category_clue = False
 
@@ -149,6 +149,20 @@ def main():
             pos_emb=pos_emb,
             cat_emb=cat_emb,
             mlp_cat=mlp_cat,
+            img_noise=img_noise,
+            mean=mean,
+            std=std,
+            num_mlp_layers=num_mlp_layers,
+            device=device,
+        ).to(device)
+
+    if model_name == "MLPRec":
+        gen_img_emb = torch.load(f"{path}/gen_img_emb.pt")
+        model = MLPRec(
+            num_item=num_item,
+            gen_img_emb=gen_img_emb,
+            hidden_act=hidden_act,
+            num_gen_img=num_gen_img,
             img_noise=img_noise,
             mean=mean,
             std=std,

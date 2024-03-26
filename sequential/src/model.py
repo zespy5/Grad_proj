@@ -314,3 +314,61 @@ class MLPBERT4Rec(nn.Module):
 
         out = self.out(self.MLP(mlp_in))
         return out
+
+
+class MLPRec(nn.Module):
+    def __init__(
+        self,
+        num_item,
+        gen_img_emb,
+        hidden_act="gelu",
+        num_gen_img=1,
+        img_noise=False,
+        mean=0,
+        std=1,
+        num_mlp_layers=2,
+        device="cpu",
+    ):
+        super(MLPRec, self).__init__()
+        self.num_item = num_item
+        self.hidden_act = hidden_act
+        self.device = device
+        self.img_noise = img_noise
+        self.std = std
+        self.mean = mean
+        self.num_mlp_layers = num_mlp_layers
+        self.num_gen_img = num_gen_img
+        self.gen_img_emb = gen_img_emb.to(self.device) if self.num_gen_img else gen_img_emb  # (num_item) X (3*512)
+
+        # init MLP
+        self.MLP_modules = []
+        in_size = self.gen_img_emb.shape[-1] * self.num_gen_img
+
+        if self.hidden_act == "gelu":
+            self.activate = nn.GELU()
+        if self.hidden_act == "mish":
+            self.activate = nn.Mish()
+        if self.hidden_act == "silu":
+            self.activate = nn.SiLU()
+
+        for _ in range(self.num_mlp_layers):
+            self.MLP_modules.append(nn.Linear(in_size, in_size // 2))
+            self.MLP_modules.append(self.activate)
+            in_size = in_size // 2
+
+        self.MLP = nn.Sequential(*self.MLP_modules)
+        self.out = nn.Linear(in_size, self.num_item + 1)
+
+    def forward(self, log_seqs, labels):
+        item_ids = log_seqs.clone().detach()
+        mask_index = torch.where(item_ids == self.num_item + 1)  # mask 찾기
+        item_ids[mask_index] = labels[mask_index]  # mask의 본래 아이템 번호 찾기
+
+        img_idx = sample([0, 1, 2], k=self.num_gen_img)  # 생성형 이미지 추출
+        gen_imgs = torch.flatten(self.gen_img_emb[item_ids - 1][:, :, img_idx, :], start_dim=-2, end_dim=-1)
+
+        if self.img_noise:
+            gen_imgs += torch.randn_like(gen_imgs) * self.std + self.mean
+
+        out = self.out(self.MLP(gen_imgs))
+        return out
