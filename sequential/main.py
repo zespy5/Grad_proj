@@ -40,6 +40,7 @@ def main():
     num_gen_img = 3
     mask_prob = 0.4
     category_clue = False
+    description_group = False # group by same image description
 
     ## TRAIN ##
     lr = 0.001
@@ -115,6 +116,7 @@ def main():
     train_data = torch.load(f"{path}/train_data.pt")
     valid_data = torch.load(f"{path}/valid_data.pt")
     test_data = torch.load(f"{path}/test_data.pt")
+    id_group_dict = torch.load(f"{path}/id_group_dict.pt") if description_group else None
 
     num_user = metadata["num of user"]
     num_item = metadata["num of item"]
@@ -139,6 +141,7 @@ def main():
             gen_img_emb=gen_img_emb,
             num_cat=num_cat,
             item_prod_type=item_prod_type,
+            idx_groups=id_group_dict,
             hidden_size=hidden_size,
             num_attention_heads=num_attention_heads,
             num_hidden_layers=num_hidden_layers,
@@ -161,6 +164,7 @@ def main():
         model = MLPRec(
             num_item=num_item,
             gen_img_emb=gen_img_emb,
+            idx_groups=id_group_dict,
             hidden_act=hidden_act,
             num_gen_img=num_gen_img,
             img_noise=img_noise,

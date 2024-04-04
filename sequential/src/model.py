@@ -210,6 +210,7 @@ class MLPBERT4Rec(nn.Module):
         gen_img_emb,
         num_cat,
         item_prod_type,
+        idx_groups=None,
         hidden_size=256,
         num_attention_heads=4,
         num_hidden_layers=3,
@@ -245,6 +246,7 @@ class MLPBERT4Rec(nn.Module):
         self.num_gen_img = num_gen_img
         self.gen_img_emb = gen_img_emb.to(self.device) if self.num_gen_img else gen_img_emb  # (num_item) X (3*512)
         self.item_prod_type = item_prod_type.to(self.device)  # [item_id : category]
+        self.idx_groups = idx_groups
 
         self.item_emb = nn.Embedding(num_item + 2, hidden_size, padding_idx=0)
         self.dropout = nn.Dropout(dropout_prob)
@@ -290,11 +292,15 @@ class MLPBERT4Rec(nn.Module):
             mask_index = torch.where(item_ids == self.num_item + 1)  # mask 찾기
             item_ids[mask_index] = labels[mask_index]  # mask의 본래 아이템 번호 찾기
 
+        item_ids -= 1
+        if self.idx_groups is not None:
+            f = lambda x: sample(self.idx_groups[x], k=1)[0] if x != -1 else -1
+            item_ids = np.vectorize(f)(item_ids.detach().cpu())
         if self.pos_emb:
             positions = np.tile(np.array(range(log_seqs.shape[1])), [log_seqs.shape[0], 1])
             seqs += self.positional_emb(torch.tensor(positions).to(self.device))
         if self.cat_emb:
-            seqs += self.category_emb(self.item_prod_type[item_ids - 1])
+            seqs += self.category_emb(self.item_prod_type[item_ids])
 
         seqs = self.emb_layernorm(self.dropout(seqs))
 
@@ -304,13 +310,13 @@ class MLPBERT4Rec(nn.Module):
 
         if self.num_gen_img:
             img_idx = sample([0, 1, 2], k=self.num_gen_img)  # 생성형 이미지 추출
-            gen_imgs = torch.flatten(self.gen_img_emb[item_ids - 1][:, :, img_idx, :], start_dim=-2, end_dim=-1)
+            gen_imgs = torch.flatten(self.gen_img_emb[item_ids][:, :, img_idx, :], start_dim=-2, end_dim=-1)
             if self.img_noise:
                 gen_imgs += torch.randn_like(gen_imgs) * self.std + self.mean
             mlp_in = torch.concat([mlp_in, gen_imgs], dim=-1)
 
         if self.mlp_cat:
-            mlp_in = torch.concat([mlp_in, self.category_emb(self.item_prod_type[item_ids - 1])], dim=-1)
+            mlp_in = torch.concat([mlp_in, self.category_emb(self.item_prod_type[item_ids])], dim=-1)
 
         out = self.out(self.MLP(mlp_in))
         return out
@@ -321,6 +327,7 @@ class MLPRec(nn.Module):
         self,
         num_item,
         gen_img_emb,
+        idx_groups=None,
         hidden_act="gelu",
         num_gen_img=1,
         img_noise=False,
@@ -331,6 +338,7 @@ class MLPRec(nn.Module):
     ):
         super(MLPRec, self).__init__()
         self.num_item = num_item
+        self.idx_groups = idx_groups
         self.hidden_act = hidden_act
         self.device = device
         self.img_noise = img_noise
@@ -364,8 +372,12 @@ class MLPRec(nn.Module):
         mask_index = torch.where(item_ids == self.num_item + 1)  # mask 찾기
         item_ids[mask_index] = labels[mask_index]  # mask의 본래 아이템 번호 찾기
 
+        item_ids -= 1
+        if self.idx_groups is not None:
+            f = lambda x: sample(self.idx_groups[x], k=1)[0] if x != -1 else -1
+            item_ids = np.vectorize(f)(item_ids.detach().cpu())
         img_idx = sample([0, 1, 2], k=self.num_gen_img)  # 생성형 이미지 추출
-        gen_imgs = torch.flatten(self.gen_img_emb[item_ids - 1][:, :, img_idx, :], start_dim=-2, end_dim=-1)
+        gen_imgs = torch.flatten(self.gen_img_emb[item_ids][:, :, img_idx, :], start_dim=-2, end_dim=-1)
 
         if self.img_noise:
             gen_imgs += torch.randn_like(gen_imgs) * self.std + self.mean
