@@ -26,9 +26,8 @@ def train(model, optimizer, scheduler, dataloader, criterion, device):
         if isinstance(model, (BERT4Rec, BERT4RecWithHF)):
             logits = model(tokens)
 
-        # 이거 맞겠지?..
-        pos_score = torch.gather(logits, -1, labels)
-        neg_score = torch.gather(logits, -1, negs)
+        pos_score = torch.gather(logits, -1, labels.unsqueeze(-1))
+        neg_score = torch.gather(logits, -1, negs.unsqueeze(-1))
 
         loss = criterion(pos_score, neg_score, model.parameters())
 
@@ -70,8 +69,8 @@ def eval(
             if isinstance(model, (BERT4Rec, BERT4RecWithHF)):
                 logits = model(tokens)
             if mode == "valid":
-                pos_score = torch.gather(logits, -1, labels)
-                neg_score = torch.gather(logits, -1, negs)
+                pos_score = torch.gather(logits, -1, labels.unsqueeze(-1))
+                neg_score = torch.gather(logits, -1, negs.unsqueeze(-1))
                 loss = criterion(pos_score, neg_score, model.parameters())
 
                 total_loss += loss.item()
