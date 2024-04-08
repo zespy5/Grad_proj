@@ -317,18 +317,18 @@ class MLPBERT4Rec(nn.Module):
 
         if self.num_gen_img:
             img_idx = sample([0, 1, 2], k=self.num_gen_img)  # 생성형 이미지 추출
-            mlp_concat = torch.flatten(self.gen_img_emb[item_ids - 1][:, :, img_idx, :], start_dim=-2, end_dim=-1)
+            mlp_concat = torch.flatten(self.gen_img_emb[item_ids][:, :, img_idx, :], start_dim=-2, end_dim=-1)
             if self.img_noise:
                 mlp_concat += torch.randn_like(mlp_concat) * self.std + self.mean
 
         if self.mlp_cat:
-            mlp_concat = self.category_emb(self.item_prod_type[item_ids - 1])
+            mlp_concat = self.category_emb(self.item_prod_type[item_ids])
 
         if self.text_emb is not None:
             if self.text_emb.shape[0] == self.num_item:
-                mlp_concat = self.text_emb[item_ids - 1]
+                mlp_concat = self.text_emb[item_ids]
             if self.text_emb.shape[0] == self.num_cat:
-                mlp_concat = self.text_emb[self.item_prod_type[item_ids - 1]]
+                mlp_concat = self.text_emb[self.item_prod_type[item_ids]]
 
         mlp_mask = (log_seqs > 0).unsqueeze(-1).repeat(1, 1, mlp_concat.shape[-1]).to(self.device)
         mlp_in = torch.concat([mlp_in, mlp_concat * mlp_mask], dim=-1)
