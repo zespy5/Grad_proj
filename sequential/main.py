@@ -19,11 +19,11 @@ def main():
     mk_dir("./model")
     mk_dir("./data")
     timestamp = get_timestamp()
-    name = f"work-{timestamp}"
+    name = f"work-{timestamp}_noise_gen"
 
     ############ SET HYPER PARAMS #############
     ## MODEL ##
-    model_name = "MLPRec"
+    model_name = "MLPBERT4Rec"
     hidden_size = 256
     num_attention_heads = 4
     num_hidden_layers = 4
@@ -34,15 +34,17 @@ def main():
     cat_emb = False
     mlp_cat = False
     img_noise = True
-    std = 0
+    std = 0.001
     mean = 0
     hidden_act = "gelu"
-    num_gen_img = 3
+    num_gen_img = 2
     mask_prob = 0.4
     category_clue = False
+    cat_text = False
+    detail_text = False
 
     ## TRAIN ##
-    lr = 0.001
+    lr = 0.0001
     epoch = 60
     batch_size = 128
     weight_decay = 0.001
@@ -51,7 +53,7 @@ def main():
     data_local = False
     data_repo = "sequential"
     dataset = "small"
-    data_version = "f87d82148a32fb66f74dc2dfea9e3cf477838c91"
+    data_version = "3e382584e43c35a121f6a97171979c738f272fae"
 
     ## ETC ##
     n_cuda = "3"
@@ -89,6 +91,8 @@ def main():
             "weight_decay": weight_decay,
             "batch_size": batch_size,
             "data_version": data_version,
+            "detail_text": detail_text,
+            "cat_text": cat_text,
         },
     )
 
@@ -134,6 +138,13 @@ def main():
     ## MODEL INIT ##
     if model_name == "MLPBERT4Rec":
         gen_img_emb = torch.load(f"{path}/gen_img_emb.pt")  # dim : ((num_item)*512*3)
+        text_emb = None
+
+        if cat_text:
+            text_emb = torch.load(f"{path}/cat_text_embeddings.pt")
+        if detail_text:
+            text_emb = torch.load(f"{path}/detail_text_embeddings.pt")
+
         model = MLPBERT4Rec(
             num_item=num_item,
             gen_img_emb=gen_img_emb,
@@ -154,6 +165,7 @@ def main():
             std=std,
             num_mlp_layers=num_mlp_layers,
             device=device,
+            text_emb=text_emb,
         ).to(device)
 
     if model_name == "MLPRec":

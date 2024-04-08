@@ -225,6 +225,7 @@ class MLPBERT4Rec(nn.Module):
         std=1,
         num_mlp_layers=2,
         device="cpu",
+        text_emb=None,
     ):
         super(MLPBERT4Rec, self).__init__()
 
@@ -243,7 +244,9 @@ class MLPBERT4Rec(nn.Module):
         self.mean = mean
         self.num_mlp_layers = num_mlp_layers
         self.num_gen_img = num_gen_img
-        self.gen_img_emb = gen_img_emb.to(self.device) if self.num_gen_img else gen_img_emb  # (num_item) X (3*512)
+        self.gen_img_emb = gen_img_emb.to(self.device) if self.num_gen_img else None  # (num_item) X (3*512)
+        self.text_emb = text_emb.to(self.device) if text_emb is not None else text_emb  # (num_item) X (3*512)
+
         self.item_prod_type = item_prod_type.to(self.device)  # [item_id : category]
 
         self.item_emb = nn.Embedding(num_item + 2, hidden_size, padding_idx=0)
@@ -264,7 +267,11 @@ class MLPBERT4Rec(nn.Module):
 
         # init MLP
         self.MLP_modules = []
-        in_size = self.hidden_size + self.gen_img_emb.shape[-1] * self.num_gen_img + self.hidden_size * self.mlp_cat
+        in_size = self.hidden_size + self.hidden_size * self.mlp_cat
+        if self.text_emb is not None:
+            in_size += self.text_emb.shape[-1]
+        if self.num_gen_img:
+            in_size += self.gen_img_emb.shape[-1] * self.num_gen_img
 
         if self.hidden_act == "gelu":
             self.activate = nn.GELU()
@@ -283,9 +290,9 @@ class MLPBERT4Rec(nn.Module):
 
     def forward(self, log_seqs, labels):
         seqs = self.item_emb(log_seqs).to(self.device)
-        mask = (log_seqs > 0).unsqueeze(1).repeat(1, log_seqs.shape[1], 1).unsqueeze(1).to(self.device)
+        attn_mask = (log_seqs > 0).unsqueeze(1).repeat(1, log_seqs.shape[1], 1).unsqueeze(1).to(self.device)
 
-        if self.cat_emb or self.num_gen_img or self.mlp_cat:
+        if self.cat_emb or self.num_gen_img or self.mlp_cat or self.text_emb is not None:
             item_ids = log_seqs.clone().detach()
             mask_index = torch.where(item_ids == self.num_item + 1)  # mask 찾기
             item_ids[mask_index] = labels[mask_index]  # mask의 본래 아이템 번호 찾기
@@ -299,20 +306,28 @@ class MLPBERT4Rec(nn.Module):
         seqs = self.emb_layernorm(self.dropout(seqs))
 
         for block in self.bert:
-            seqs, _ = block(seqs, mask)
+            seqs, _ = block(seqs, attn_mask)
         mlp_in = seqs
 
         if self.num_gen_img:
             img_idx = sample([0, 1, 2], k=self.num_gen_img)  # 생성형 이미지 추출
-            gen_imgs = torch.flatten(self.gen_img_emb[item_ids - 1][:, :, img_idx, :], start_dim=-2, end_dim=-1)
+            mlp_concat = torch.flatten(self.gen_img_emb[item_ids - 1][:, :, img_idx, :], start_dim=-2, end_dim=-1)
             if self.img_noise:
-                gen_imgs += torch.randn_like(gen_imgs) * self.std + self.mean
-            mlp_in = torch.concat([mlp_in, gen_imgs], dim=-1)
+                mlp_concat += torch.randn_like(mlp_concat) * self.std + self.mean
 
         if self.mlp_cat:
-            mlp_in = torch.concat([mlp_in, self.category_emb(self.item_prod_type[item_ids - 1])], dim=-1)
+            mlp_concat = self.category_emb(self.item_prod_type[item_ids - 1])
 
+        if self.text_emb is not None:
+            if self.text_emb.shape[0] == self.num_item:
+                mlp_concat = self.text_emb[item_ids - 1]
+            if self.text_emb.shape[0] == self.num_cat:
+                mlp_concat = self.text_emb[self.item_prod_type[item_ids - 1]]
+
+        mlp_mask = (log_seqs > 0).unsqueeze(-1).repeat(1, 1, mlp_concat.shape[-1]).to(self.device)
+        mlp_in = torch.concat([mlp_in, mlp_concat * mlp_mask], dim=-1)
         out = self.out(self.MLP(mlp_in))
+
         return out
 
 
