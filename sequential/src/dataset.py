@@ -19,6 +19,7 @@ class BERTDataset(Dataset):
         seq = torch.tensor(self.user_seq[index], dtype=torch.long) + 1
         tokens = []
         labels = []
+        negative = []
 
         for s in seq:
             prob = random.random()
@@ -32,19 +33,22 @@ class BERTDataset(Dataset):
                 else:
                     tokens.append(s)
                 labels.append(s)
+                # negative sampling data를 이용하여 negative에 update
             else:  # not train
                 tokens.append(s)
                 labels.append(0)
+                negative.append(0)
 
         tokens = tokens[-self.max_len :]
         labels = labels[-self.max_len :]
+        negative = negative[-self.max_len :]
         mask_len = self.max_len - len(tokens)
 
         # padding
         tokens = [0] * mask_len + tokens
         labels = [0] * mask_len + labels
-
-        return torch.tensor(tokens, dtype=torch.long), torch.tensor(labels, dtype=torch.long)
+        negative = [0] * mask_len + negative
+        return torch.tensor(tokens, dtype=torch.long), torch.tensor(labels, dtype=torch.long), torch.tensor(negative, dtype=torch.long)
 
 
 class BERTTestDataset(Dataset):

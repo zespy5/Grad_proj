@@ -6,7 +6,7 @@ import torch.nn as nn
 import wandb
 from huggingface_hub import snapshot_download
 from src.dataset import BERTDataset, BERTTestDataset
-from src.model import BERT4Rec, BERT4RecWithHF, MLPBERT4Rec, MLPRec
+from src.model import BERT4Rec, BERT4RecWithHF, MLPBERT4Rec, MLPRec, BPRLoss
 from src.train import eval, train
 from src.utils import get_timestamp, load_json, mk_dir, seed_everything
 from torch.optim import Adam, lr_scheduler
@@ -212,7 +212,7 @@ def main():
             device,
         ).to(device)
 
-    criterion = nn.CrossEntropyLoss(ignore_index=0)
+    criterion = BPRLoss() #bpr loss
     optimizer = Adam(params=model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lambda epoch: 0.85**epoch)
 

@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from src.model import BERT4Rec, BERT4RecWithHF, MLPBERT4Rec, MLPRec
+from src.model import BERT4Rec, BERT4RecWithHF, MLPBERT4Rec, MLPRec, BPRLoss
 from src.utils import (
     ndcg_at_k,
     recall_at_k,
@@ -16,18 +16,21 @@ def train(model, optimizer, scheduler, dataloader, criterion, device):
     model.train()
     total_loss = 0
 
-    for tokens, labels in tqdm(dataloader):
+    for tokens, labels, neg in tqdm(dataloader):
         tokens = tokens.to(device)
         labels = labels.to(device)
+        neg = neg.to(device)
 
         if isinstance(model, (MLPBERT4Rec, MLPRec)):
             logits = model(tokens, labels)
         if isinstance(model, (BERT4Rec, BERT4RecWithHF)):
             logits = model(tokens)
 
-        logits = logits.view(-1, logits.size(-1))
-        labels = labels.view(-1)
-        loss = criterion(logits, labels)
+        #이거 맞겠지?..
+        pos_score = torch.gather(logits, -1, labels)
+        neg_score = torch.gather(logits, -1, neg)
+        
+        loss = criterion(pos_score, neg_score, model.parameters())
 
         model.zero_grad()
         loss.backward()

@@ -399,3 +399,29 @@ class MLPRec(nn.Module):
 
         out = self.out(self.MLP(gen_imgs))
         return out
+
+class RegLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+    
+    def forward(self, parameters):
+        reg_loss = None
+        for W in parameters:
+            if reg_loss is None:
+                reg_loss = W.norm(2)
+            else:
+                reg_loss = reg_loss + W.norm(2)
+        return reg_loss
+    
+class BPRLoss(nn.Module):
+    
+    def __init__(self, gamma=1e-10):
+        super().__init__()
+        self.reg_loss = RegLoss()
+        self.gamma = gamma
+        
+    def forward(self, pos_score, neg_scores, parameters):
+        loss = -torch.log(self.gamma + torch.sigmoid(pos_score - neg_scores)).mean()
+        reg_loss = self.reg_loss(parameters)
+        
+        return loss + reg_loss
