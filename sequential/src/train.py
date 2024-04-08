@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from src.model import BERT4Rec, BERT4RecWithHF, MLPBERT4Rec, MLPRec, BPRLoss
+from src.model import BERT4Rec, BERT4RecWithHF, BPRLoss, MLPBERT4Rec, MLPRec
 from src.utils import (
     ndcg_at_k,
     recall_at_k,
@@ -16,20 +16,20 @@ def train(model, optimizer, scheduler, dataloader, criterion, device):
     model.train()
     total_loss = 0
 
-    for tokens, labels, neg in tqdm(dataloader):
+    for tokens, labels, negs in tqdm(dataloader):
         tokens = tokens.to(device)
         labels = labels.to(device)
-        neg = neg.to(device)
+        negs = negs.to(device)
 
         if isinstance(model, (MLPBERT4Rec, MLPRec)):
             logits = model(tokens, labels)
         if isinstance(model, (BERT4Rec, BERT4RecWithHF)):
             logits = model(tokens)
 
-        #이거 맞겠지?..
+        # 이거 맞겠지?..
         pos_score = torch.gather(logits, -1, labels)
-        neg_score = torch.gather(logits, -1, neg)
-        
+        neg_score = torch.gather(logits, -1, negs)
+
         loss = criterion(pos_score, neg_score, model.parameters())
 
         model.zero_grad()
@@ -59,23 +59,28 @@ def eval(
     pred_list = []
 
     with torch.no_grad():
-        for idx, (users, tokens, labels) in enumerate(tqdm(dataloader)):
+        for idx, (users, tokens, labels, negs) in enumerate(tqdm(dataloader)):
             tokens = tokens.to(device)
             labels = labels.to(device)
             users = users.to(device)
+            negs = negs.to(device)
 
             if isinstance(model, (MLPBERT4Rec, MLPRec)):
                 logits = model(tokens, labels)
             if isinstance(model, (BERT4Rec, BERT4RecWithHF)):
                 logits = model(tokens)
             if mode == "valid":
-                loss = criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
+                pos_score = torch.gather(logits, -1, labels)
+                neg_score = torch.gather(logits, -1, negs)
+                loss = criterion(pos_score, neg_score, model.parameters())
+
                 total_loss += loss.item()
 
             used_items_batch = [np.unique(train_data[user]) for user in users.cpu().numpy()]
 
             target_batch = labels[:, -1]
             user_res_batch = -logits[:, -1, 1:]
+
             for i, used_item_list in enumerate(used_items_batch):
                 user_res_batch[i][used_item_list] = user_res_batch[i].max() + 1
 

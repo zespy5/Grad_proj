@@ -6,7 +6,7 @@ import torch.nn as nn
 import wandb
 from huggingface_hub import snapshot_download
 from src.dataset import BERTDataset, BERTTestDataset
-from src.model import BERT4Rec, BERT4RecWithHF, MLPBERT4Rec, MLPRec, BPRLoss
+from src.model import BERT4Rec, BERT4RecWithHF, BPRLoss, MLPBERT4Rec, MLPRec
 from src.train import eval, train
 from src.utils import get_timestamp, load_json, mk_dir, seed_everything
 from torch.optim import Adam, lr_scheduler
@@ -34,7 +34,7 @@ def main():
     cat_emb = False
     mlp_cat = False
     img_noise = True
-    std = 0.001
+    std = 0.01
     mean = 0
     hidden_act = "gelu"
     num_gen_img = 2
@@ -46,7 +46,7 @@ def main():
 
     ## TRAIN ##
     lr = 0.0001
-    epoch = 60
+    epoch = 50
     batch_size = 128
     weight_decay = 0.001
 
@@ -54,10 +54,10 @@ def main():
     data_local = False
     data_repo = "sequential"
     dataset = "small"
-    data_version = "3e382584e43c35a121f6a97171979c738f272fae"
+    data_version = "74651f0ea852d5628ecebb39140421ce929da218"
 
     ## ETC ##
-    n_cuda = "3"
+    n_cuda = "0"
 
     ############ WANDB INIT #############
     print("--------------- Wandb SETTING ---------------")
@@ -121,14 +121,15 @@ def main():
     valid_data = torch.load(f"{path}/valid_data.pt")
     test_data = torch.load(f"{path}/test_data.pt")
     id_group_dict = torch.load(f"{path}/id_group_dict.pt") if description_group else None
+    sim_matrix = torch.load(f"{path}/sim_matrix_sorted.pt")
 
     num_user = metadata["num of user"]
     num_item = metadata["num of item"]
     num_cat = len(items_by_prod_type)
 
-    train_dataset = BERTDataset(train_data, num_user, num_item, max_len, mask_prob)
-    valid_dataset = BERTTestDataset(valid_data, num_user, num_item, max_len)
-    test_dataset = BERTTestDataset(test_data, num_user, num_item, max_len)
+    train_dataset = BERTDataset(train_data, sim_matrix, num_user, num_item, max_len, mask_prob)
+    valid_dataset = BERTTestDataset(valid_data, sim_matrix, num_user, num_item, max_len)
+    test_dataset = BERTTestDataset(test_data, sim_matrix, num_user, num_item, max_len)
 
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, num_workers=4)
     valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, num_workers=4)
@@ -212,7 +213,7 @@ def main():
             device,
         ).to(device)
 
-    criterion = BPRLoss() #bpr loss
+    criterion = BPRLoss()  # bpr loss
     optimizer = Adam(params=model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lambda epoch: 0.85**epoch)
 
