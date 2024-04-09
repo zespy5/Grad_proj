@@ -337,7 +337,7 @@ class MLPBERT4Rec(nn.Module):
 
         mlp_mask = (log_seqs > 0).unsqueeze(-1).repeat(1, 1, mlp_concat.shape[-1]).to(self.device)
         mlp_in = torch.concat([mlp_in, mlp_concat * mlp_mask], dim=-1)
-        breakpoint()
+        
         out = self.out(self.MLP(mlp_in))
 
         return out
