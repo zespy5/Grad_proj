@@ -329,9 +329,15 @@ class MLPBERT4Rec(nn.Module):
                 mlp_concat = self.text_emb[item_ids]
             if self.text_emb.shape[0] == self.num_cat:
                 mlp_concat = self.text_emb[self.item_prod_type[item_ids]]
+                
+        #predict 안하는 아이템 gen emb 지우기
+        
+        none_zeros = labels != 0
+        mlp_concat = mlp_concat*none_zeros.unsqueeze(-1)
 
         mlp_mask = (log_seqs > 0).unsqueeze(-1).repeat(1, 1, mlp_concat.shape[-1]).to(self.device)
         mlp_in = torch.concat([mlp_in, mlp_concat * mlp_mask], dim=-1)
+        breakpoint()
         out = self.out(self.MLP(mlp_in))
 
         return out
@@ -424,7 +430,9 @@ class BPRLoss(nn.Module):
         is_same = pos_score!=neg_scores
         sig_diff = torch.sigmoid(pos_score - neg_scores)
         sig_diff = is_same*sig_diff
+        num = torch.sum(is_same)
         
-        loss = -torch.log(self.gamma + sig_diff).mean()
+        loss = -torch.log(self.gamma + sig_diff)
+        loss = torch.sum(loss)/num
         reg_loss = self.reg_loss(parameters)
         return loss + reg_loss
