@@ -227,6 +227,7 @@ class MLPBERT4Rec(nn.Module):
         num_mlp_layers=2,
         device="cpu",
         text_emb=None,
+        merge="concat",
     ):
         super(MLPBERT4Rec, self).__init__()
 
@@ -245,6 +246,7 @@ class MLPBERT4Rec(nn.Module):
         self.mean = mean
         self.num_mlp_layers = num_mlp_layers
         self.num_gen_img = num_gen_img
+        self.merge = merge
         self.gen_img_emb = gen_img_emb.to(self.device) if self.num_gen_img else None  # (num_item) X (3*512)
         self.text_emb = text_emb.to(self.device) if text_emb is not None else text_emb  # (num_item) X (3*512)
 
@@ -269,11 +271,16 @@ class MLPBERT4Rec(nn.Module):
 
         # init MLP
         self.MLP_modules = []
-        in_size = self.hidden_size + self.hidden_size * self.mlp_cat
-        if self.text_emb is not None:
-            in_size += self.text_emb.shape[-1]
-        if self.num_gen_img:
-            in_size += self.gen_img_emb.shape[-1] * self.num_gen_img
+        if self.merge == "concat":
+            in_size = self.hidden_size + self.hidden_size * self.mlp_cat
+            if self.text_emb is not None:
+                in_size += self.text_emb.shape[-1]
+            if self.num_gen_img:
+                in_size += self.gen_img_emb.shape[-1] * self.num_gen_img
+
+        if self.merge == "mul":
+            in_size = self.gen_img_emb.shape[-1] * self.num_gen_img
+            self.mul_linear = nn.Linear(hidden_size, in_size)
 
         if self.hidden_act == "gelu":
             self.activate = nn.GELU()
@@ -298,8 +305,8 @@ class MLPBERT4Rec(nn.Module):
             item_ids = log_seqs.clone().detach()
             mask_index = torch.where(item_ids == self.num_item + 1)  # mask 찾기
             item_ids[mask_index] = labels[mask_index]  # mask의 본래 아이템 번호 찾기
+            item_ids -= 1
 
-        item_ids -= 1
         if self.idx_groups is not None:
             f = lambda x: sample(self.idx_groups[x], k=1)[0] if x != -1 else -1
             item_ids = np.vectorize(f)(item_ids.detach().cpu())
@@ -317,29 +324,28 @@ class MLPBERT4Rec(nn.Module):
 
         if self.num_gen_img:
             img_idx = sample([0, 1, 2], k=self.num_gen_img)  # 생성형 이미지 추출
-            mlp_concat = torch.flatten(self.gen_img_emb[item_ids][:, :, img_idx, :], start_dim=-2, end_dim=-1)
+            mlp_merge = torch.flatten(self.gen_img_emb[item_ids][:, :, img_idx, :], start_dim=-2, end_dim=-1)
             if self.img_noise:
-                mlp_concat += torch.randn_like(mlp_concat) * self.std + self.mean
+                mlp_merge += torch.randn_like(mlp_merge) * self.std + self.mean
 
         if self.mlp_cat:
-            mlp_concat = self.category_emb(self.item_prod_type[item_ids])
+            mlp_merge = self.category_emb(self.item_prod_type[item_ids])
 
         if self.text_emb is not None:
             if self.text_emb.shape[0] == self.num_item:
-                mlp_concat = self.text_emb[item_ids]
+                mlp_merge = self.text_emb[item_ids]
             if self.text_emb.shape[0] == self.num_cat:
-                mlp_concat = self.text_emb[self.item_prod_type[item_ids]]
-                
-        #predict 안하는 아이템 gen emb 지우기
-        
-        none_zeros = labels != 0
-        mlp_concat = mlp_concat*none_zeros.unsqueeze(-1)
+                mlp_merge = self.text_emb[self.item_prod_type[item_ids]]
 
-        mlp_mask = (log_seqs > 0).unsqueeze(-1).repeat(1, 1, mlp_concat.shape[-1]).to(self.device)
-        mlp_in = torch.concat([mlp_in, mlp_concat * mlp_mask], dim=-1)
-        
+        mlp_merge *= (labels != 0).unsqueeze(-1)  # loss 계산에 포함되지 않는 것 0으로 변경
+        mlp_mask = (log_seqs > 0).unsqueeze(-1).repeat(1, 1, mlp_merge.shape[-1]).to(self.device)  # padding 0으로 변경
+
+        if self.merge == "concat":
+            mlp_in = torch.concat([mlp_in, mlp_merge * mlp_mask], dim=-1)
+        if self.merge == "mul":
+            mlp_in = self.mul_linear(mlp_in) * mlp_merge
+
         out = self.out(self.MLP(mlp_in))
-
         return out
 
 
@@ -406,10 +412,11 @@ class MLPRec(nn.Module):
         out = self.out(self.MLP(gen_imgs))
         return out
 
+
 class RegLoss(nn.Module):
     def __init__(self):
         super().__init__()
-    
+
     def forward(self, parameters):
         reg_loss = None
         for W in parameters:
@@ -418,21 +425,22 @@ class RegLoss(nn.Module):
             else:
                 reg_loss = reg_loss + W.norm(2)
         return reg_loss
-    
+
+
 class BPRLoss(nn.Module):
-    
+
     def __init__(self, gamma=1e-10):
         super().__init__()
         self.reg_loss = RegLoss()
         self.gamma = gamma
-        
+
     def forward(self, pos_score, neg_scores, parameters):
-        is_same = pos_score!=neg_scores
+        is_same = pos_score != neg_scores
         sig_diff = torch.sigmoid(pos_score - neg_scores)
-        sig_diff = is_same*sig_diff
+        sig_diff = is_same * sig_diff
         num = torch.sum(is_same)
-        
+
         loss = -torch.log(self.gamma + sig_diff)
-        loss = torch.sum(loss)/num
+        loss = torch.sum(loss) / num
         reg_loss = self.reg_loss(parameters)
         return loss + reg_loss
