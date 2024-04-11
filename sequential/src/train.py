@@ -1,14 +1,8 @@
 import numpy as np
 import torch
 from src.model import BERT4Rec, BERT4RecWithHF, BPRLoss, MLPBERT4Rec, MLPRec
-from src.utils import (
-    ndcg_at_k,
-    recall_at_k,
-    simple_ndcg_at_k,
-    simple_ndcg_at_k_batch,
-    simple_recall_at_k,
-    simple_recall_at_k_batch,
-)
+from src.utils import simple_ndcg_at_k_batch, simple_recall_at_k_batch
+from torch import nn
 from tqdm import tqdm
 
 
@@ -26,10 +20,14 @@ def train(model, optimizer, scheduler, dataloader, criterion, device):
         if isinstance(model, (BERT4Rec, BERT4RecWithHF)):
             logits = model(tokens)
 
-        pos_score = torch.gather(logits, -1, labels.unsqueeze(-1))
-        neg_score = torch.gather(logits, -1, negs.unsqueeze(-1))
-
-        loss = criterion(pos_score, neg_score, model.parameters())
+        if isinstance(criterion, (BPRLoss)):
+            pos_score = torch.gather(logits, -1, labels.unsqueeze(-1))
+            neg_score = torch.gather(logits, -1, negs.unsqueeze(-1))
+            loss = criterion(pos_score, neg_score, model.parameters())
+        if isinstance(criterion, (nn.CrossEntropyLoss)):
+            logits = logits.view(-1, logits.size(-1))
+            labels = labels.view(-1)
+            loss = criterion(logits, labels)
 
         model.zero_grad()
         loss.backward()
@@ -69,9 +67,12 @@ def eval(
             if isinstance(model, (BERT4Rec, BERT4RecWithHF)):
                 logits = model(tokens)
             if mode == "valid":
-                pos_score = torch.gather(logits, -1, labels.unsqueeze(-1))
-                neg_score = torch.gather(logits, -1, negs.unsqueeze(-1))
-                loss = criterion(pos_score, neg_score, model.parameters())
+                if isinstance(criterion, (BPRLoss)):
+                    pos_score = torch.gather(logits, -1, labels.unsqueeze(-1))
+                    neg_score = torch.gather(logits, -1, negs.unsqueeze(-1))
+                    loss = criterion(pos_score, neg_score, model.parameters())
+                if isinstance(criterion, (nn.CrossEntropyLoss)):
+                    loss = criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
 
                 total_loss += loss.item()
 

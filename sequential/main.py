@@ -19,7 +19,7 @@ def main():
     mk_dir("./model")
     mk_dir("./data")
     timestamp = get_timestamp()
-    name = f"work-{timestamp}_noise_gen"
+    name = f"work-{timestamp}_ele_MUL"
 
     ############ SET HYPER PARAMS #############
     ## MODEL ##
@@ -43,12 +43,14 @@ def main():
     description_group = False  # group by same image description
     cat_text = False
     detail_text = False
+    merge = "mul"
 
     ## TRAIN ##
-    lr = 0.0001
+    lr = 0.001
     epoch = 50
     batch_size = 128
     weight_decay = 0.001
+    loss = "BPR"
 
     ## DATA ##
     data_local = False
@@ -57,7 +59,7 @@ def main():
     data_version = "74651f0ea852d5628ecebb39140421ce929da218"
 
     ## ETC ##
-    n_cuda = "0"
+    n_cuda = "1"
 
     ############ WANDB INIT #############
     print("--------------- Wandb SETTING ---------------")
@@ -94,6 +96,8 @@ def main():
             "data_version": data_version,
             "detail_text": detail_text,
             "cat_text": cat_text,
+            "criterion": loss,
+            "merge": merge,
         },
     )
 
@@ -170,6 +174,7 @@ def main():
             num_mlp_layers=num_mlp_layers,
             device=device,
             text_emb=text_emb,
+            merge=merge,
         ).to(device)
 
     if model_name == "MLPRec":
@@ -213,7 +218,11 @@ def main():
             device,
         ).to(device)
 
-    criterion = BPRLoss()  # bpr loss
+    if loss == "BPR":
+        criterion = BPRLoss()
+    if loss == "CE":
+        criterion = nn.CrossEntropyLoss(ignore_index=0)
+
     optimizer = Adam(params=model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lambda epoch: 0.85**epoch)
 
