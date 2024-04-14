@@ -22,7 +22,7 @@ def train(model, optimizer, scheduler, dataloader, criterion, device):
 
         if isinstance(criterion, (BPRLoss)):
             pos_score = torch.gather(logits, -1, labels.unsqueeze(-1))
-            neg_score = torch.gather(logits, -1, negs.unsqueeze(-1))
+            neg_score = torch.gather(logits, -1, negs)                 #unsqueeze 안 써도됨.
             loss = criterion(pos_score, neg_score, model.parameters())
         if isinstance(criterion, (nn.CrossEntropyLoss)):
             logits = logits.view(-1, logits.size(-1))
@@ -69,7 +69,7 @@ def eval(
             if mode == "valid":
                 if isinstance(criterion, (BPRLoss)):
                     pos_score = torch.gather(logits, -1, labels.unsqueeze(-1))
-                    neg_score = torch.gather(logits, -1, negs.unsqueeze(-1))
+                    neg_score = torch.gather(logits, -1, negs)                 #unsqueeze 안 써도됨.
                     loss = criterion(pos_score, neg_score, model.parameters())
                 if isinstance(criterion, (nn.CrossEntropyLoss)):
                     loss = criterion(logits.view(-1, logits.size(-1)), labels.view(-1))

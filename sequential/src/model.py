@@ -435,11 +435,12 @@ class BPRLoss(nn.Module):
         self.gamma = gamma
 
     def forward(self, pos_score, neg_scores, parameters):
-        is_same = pos_score != neg_scores
-        sig_diff = torch.sigmoid(pos_score - neg_scores)
+        diff = pos_score - neg_scores
+        is_same = diff != 0
+        sig_diff = torch.sigmoid(diff)
         sig_diff = is_same * sig_diff
         num = torch.sum(is_same)
-
+        
         loss = -torch.log(self.gamma + sig_diff)
         loss = torch.sum(loss) / num
         reg_loss = self.reg_loss(parameters)

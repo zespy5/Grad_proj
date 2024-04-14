@@ -44,11 +44,13 @@ def main():
     cat_text = False
     detail_text = False
     merge = "mul"
+    neg_size = 50
+    neg_sample_size = 5
 
     ## TRAIN ##
     lr = 0.001
     epoch = 50
-    batch_size = 128
+    batch_size = 64
     weight_decay = 0.001
     loss = "BPR"
 
@@ -98,6 +100,8 @@ def main():
             "cat_text": cat_text,
             "criterion": loss,
             "merge": merge,
+            "neg_size" : neg_size,
+            "neg_sample_size" : neg_sample_size
         },
     )
 
@@ -131,16 +135,16 @@ def main():
     num_item = metadata["num of item"]
     num_cat = len(items_by_prod_type)
 
-    train_dataset = BERTDataset(train_data, sim_matrix, num_user, num_item, max_len, mask_prob)
-    valid_dataset = BERTTestDataset(valid_data, sim_matrix, num_user, num_item, max_len)
-    test_dataset = BERTTestDataset(test_data, sim_matrix, num_user, num_item, max_len)
+    train_dataset = BERTDataset(train_data, sim_matrix, num_user, num_item, neg_size, neg_sample_size, max_len, mask_prob)
+    valid_dataset = BERTTestDataset(valid_data, sim_matrix, num_user, num_item, neg_size, neg_sample_size, max_len)
+    test_dataset = BERTTestDataset(test_data, sim_matrix, num_user, num_item, neg_size, neg_sample_size, max_len)
 
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, num_workers=4)
     valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, num_workers=4)
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, num_workers=4)
 
     ############# SETTING FOR TRAIN #############
-    device = f"cuda:{n_cuda}" if torch.cuda.is_available() else "cpu"
+    device = f"cuda" if torch.cuda.is_available() else "cpu"
 
     ## MODEL INIT ##
     if model_name == "MLPBERT4Rec":
