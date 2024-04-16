@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from src.model import BERT4Rec, BERT4RecWithHF, BPRLoss, MLPBERT4Rec, MLPRec
+from src.models import BERT4Rec, BERT4RecWithHF, BPRLoss, MLPBERT4Rec, MLPRec
 from src.utils import simple_ndcg_at_k_batch, simple_recall_at_k_batch
 from torch import nn
 from tqdm import tqdm

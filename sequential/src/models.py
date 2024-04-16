@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import BertConfig, BertForMaskedLM
+from typing import Optional
 
 
 class ScaledDotProductAttention(nn.Module):
@@ -105,6 +106,7 @@ class BERT4Rec(nn.Module):
         dropout_prob=0.2,
         pos_emb=True,
         device="cpu",
+        **kwargs
     ):
         super(BERT4Rec, self).__init__()
 
@@ -158,6 +160,7 @@ class BERT4RecWithHF(nn.Module):
         dropout_prob=0.2,
         pos_emb=False,
         device="cpu",
+        **kwargs
     ):
         super(BERT4RecWithHF, self).__init__()
 
@@ -206,28 +209,29 @@ class BERT4RecWithHF(nn.Module):
 class MLPBERT4Rec(nn.Module):
     def __init__(
         self,
-        num_item,
-        gen_img_emb,
-        num_cat,
-        item_prod_type,
-        idx_groups=None,
-        hidden_size=256,
-        num_attention_heads=4,
-        num_hidden_layers=3,
-        hidden_act="gelu",
-        num_gen_img=1,
-        max_len=30,
-        dropout_prob=0.2,
-        pos_emb=False,
-        cat_emb=False,
-        mlp_cat=False,
-        img_noise=False,
-        mean=0,
-        std=1,
-        num_mlp_layers=2,
-        device="cpu",
-        text_emb=None,
-        merge="concat",
+        num_item: int,
+        gen_img_emb: torch.Tensor,
+        num_cat: int,
+        item_prod_type: torch.Tensor,
+        idx_groups: Optional[dict] = None,
+        hidden_size: int = 256,
+        num_attention_heads: int = 4,
+        num_hidden_layers: int = 3,
+        hidden_act: str = "gelu", # TODO: text instantiate
+        num_gen_img: int = 1,
+        max_len: int = 30,
+        dropout_prob: float = 0.2,
+        pos_emb: bool = False,
+        cat_emb: bool = False,
+        mlp_cat: bool = False,
+        img_noise: bool = False,
+        mean: float = 0,
+        std: float = 1,
+        num_mlp_layers: int = 2,
+        device: str = "cpu",
+        text_emb: Optional[torch.Tensor] = None,
+        merge: str = "concat",
+        **kwargs
     ):
         super(MLPBERT4Rec, self).__init__()
 
@@ -277,11 +281,12 @@ class MLPBERT4Rec(nn.Module):
                 in_size += self.text_emb.shape[-1]
             if self.num_gen_img:
                 in_size += self.gen_img_emb.shape[-1] * self.num_gen_img
-
         if self.merge == "mul":
             in_size = self.gen_img_emb.shape[-1] * self.num_gen_img
             self.mul_linear = nn.Linear(hidden_size, in_size)
 
+        if self.hidden_act == "relu":
+            self.activate = nn.ReLU()
         if self.hidden_act == "gelu":
             self.activate = nn.GELU()
         if self.hidden_act == "mish":
@@ -332,9 +337,9 @@ class MLPBERT4Rec(nn.Module):
             mlp_merge = self.category_emb(self.item_prod_type[item_ids])
 
         if self.text_emb is not None:
-            if self.text_emb.shape[0] == self.num_item:
+            if self.text_emb.shape[0] == self.num_item: # detail_text embedding
                 mlp_merge = self.text_emb[item_ids]
-            if self.text_emb.shape[0] == self.num_cat:
+            if self.text_emb.shape[0] == self.num_cat:  # category embedding
                 mlp_merge = self.text_emb[self.item_prod_type[item_ids]]
 
         mlp_merge *= (labels != 0).unsqueeze(-1)  # loss 계산에 포함되지 않는 것 0으로 변경
@@ -362,6 +367,7 @@ class MLPRec(nn.Module):
         std=1,
         num_mlp_layers=2,
         device="cpu",
+        **kwargs
     ):
         super(MLPRec, self).__init__()
         self.num_item = num_item
