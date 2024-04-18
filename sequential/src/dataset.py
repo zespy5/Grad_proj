@@ -7,7 +7,7 @@ from torch.utils.data import Dataset
 
 class BERTDataset(Dataset):
     def __init__(self, user_seq, sim_matrix, num_user, num_item,
-                 neg_size: int = 50, neg_sample_size : int = 3, #negative sampling
+                 neg_size: int = 1000, neg_sample_size : int = 100, #negative sampling
                  max_len: int = 30, mask_prob: float = 0.15) -> None:
         self.user_seq = user_seq
         self.num_user = num_user
@@ -19,8 +19,9 @@ class BERTDataset(Dataset):
         self.neg_sample_size = neg_sample_size   #negative sampling
         
     def sampler(self, item, user_seq):
-        candidate = np.setdiff1d(self.sim_matrix[item][:3000], user_seq, assume_unique=True)
-        return candidate[:self.neg_size+1] #negative sampling
+        candidate = np.setdiff1d(self.sim_matrix[item][:self.neg_size], user_seq, assume_unique=True)
+        candidate = np.random.shuffle(candidate)
+        return candidate[:self.neg_sample_size] #negative sampling
 
     def __len__(self):
         return self.num_user
@@ -43,13 +44,7 @@ class BERTDataset(Dataset):
                 else:
                     tokens.append(s)
                 labels.append(s)
-                negs.append(
-                    self.sampler(
-                        s - 1,
-                        seq - 1,
-                    )[np.random.randint(0,51, self.neg_sample_size)] #3개 뽑기.
-                    + 1
-                )
+                negs.append( self.sampler(s - 1, seq - 1) + 1)
             else:  # not train
                 tokens.append(s)
                 labels.append(0)
@@ -86,8 +81,9 @@ class BERTTestDataset(Dataset):
         self.neg_sample_size = neg_sample_size       #negative sampling
 
     def sampler(self, item, user_seq):
-        candidate = np.setdiff1d(self.sim_matrix[item][:3000], user_seq, assume_unique=True)
-        return candidate[:self.neg_size+1] #negative sampling
+        candidate = np.setdiff1d(self.sim_matrix[item][:self.neg_size], user_seq, assume_unique=True)
+        candidate = np.random.shuffle(candidate)
+        return candidate[:self.neg_sample_size]#negative sampling
 
     def __len__(self):
         return self.num_user
@@ -98,7 +94,7 @@ class BERTTestDataset(Dataset):
         labels = [0 for _ in range(self.max_len)]
         negs = np.zeros((self.max_len, self.neg_sample_size)) #3개 뽑기
         labels[-1] = tokens[-1].item()  # target
-        negs[-1] = self.sampler(labels[-1] - 1, tokens - 1)[np.random.randint(0,51, self.neg_sample_size)] + 1 #3개 뽑기
+        negs[-1] = self.sampler(labels[-1] - 1, tokens - 1) + 1 #3개 뽑기
         tokens[-1] = self.num_item + 1  # masking
 
         tokens = tokens[-self.max_len :]

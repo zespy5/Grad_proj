@@ -438,10 +438,12 @@ class BPRLoss(nn.Module):
         diff = pos_score - neg_scores
         is_same = diff != 0
         sig_diff = torch.sigmoid(diff)
-        sig_diff = is_same * sig_diff
+
         num = torch.sum(is_same)
-        
+
         loss = -torch.log(self.gamma + sig_diff)
+        loss = is_same*loss
         loss = torch.sum(loss) / num
+
         reg_loss = self.reg_loss(parameters)
         return loss + reg_loss
