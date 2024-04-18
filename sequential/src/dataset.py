@@ -20,7 +20,7 @@ class BERTDataset(Dataset):
         
     def sampler(self, item, user_seq):
         candidate = np.setdiff1d(self.sim_matrix[item][:self.neg_size], user_seq, assume_unique=True)
-        candidate = np.random.shuffle(candidate)
+        np.random.shuffle(candidate)
         return candidate[:self.neg_sample_size] #negative sampling
 
     def __len__(self):
@@ -82,7 +82,7 @@ class BERTTestDataset(Dataset):
 
     def sampler(self, item, user_seq):
         candidate = np.setdiff1d(self.sim_matrix[item][:self.neg_size], user_seq, assume_unique=True)
-        candidate = np.random.shuffle(candidate)
+        np.random.shuffle(candidate)
         return candidate[:self.neg_sample_size]#negative sampling
 
     def __len__(self):
