@@ -9,7 +9,7 @@ from huggingface_hub import snapshot_download
 from src.dataset import BERTDataset, BERTTestDataset
 # from src.model import BERT4Rec, BERT4RecWithHF, BPRLoss, MLPBERT4Rec, MLPRec
 from src import models
-from src.models import BPRLoss, MLPRec
+from src.models import BPRLoss
 from src.train import eval, train
 from src.utils import get_timestamp, load_json, mk_dir, seed_everything, get_config
 from torch.optim import Adam, lr_scheduler
@@ -104,6 +104,7 @@ def main():
 
     ## MODEL INIT ##
     model_class_ = getattr(models, model_name)
+    
     if model_name in ("MLPBERT4Rec", "MLPRec"):
         gen_img_emb = torch.load(f"{path}/gen_img_emb.pt")  # dim : ((num_item)*512*3)
         text_emb = None
@@ -115,15 +116,16 @@ def main():
             text_emb = torch.load(f"{path}/cat_text_embeddings.pt")
         elif model_args["detail_text"]:
             text_emb = torch.load(f"{path}/detail_text_embeddings.pt")
+        
+        model_args["gen_img_emb"] = gen_img_emb
+        model_args["text_emb"] = text_emb
     
     model = model_class_(**model_args, 
                          num_cat=num_cat,
                          num_item=num_item, 
                          item_prod_type=item_prod_type, 
-                         gen_img_emb=gen_img_emb, 
-                         text_emb=text_emb, 
                          idx_groups=id_group_dict, 
-                         device=device).to(device) # TODO: other args are only used in MLPBERT4Rec, except device, num_item, 
+                         device=device).to(device)
 
     if loss == "BPR":
         criterion = BPRLoss()

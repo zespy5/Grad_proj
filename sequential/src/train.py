@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from src.models import BERT4Rec, BERT4RecWithHF, BPRLoss, MLPBERT4Rec, MLPRec
+from src.models import BERT4RecWithHF, BPRLoss, MLPBERT4Rec
 from src.utils import simple_ndcg_at_k_batch, simple_recall_at_k_batch
 from torch import nn
 from tqdm import tqdm
@@ -15,10 +15,7 @@ def train(model, optimizer, scheduler, dataloader, criterion, device):
         labels = labels.to(device)
         negs = negs.to(device)
 
-        if isinstance(model, (MLPBERT4Rec, MLPRec)):
-            logits = model(tokens, labels)
-        if isinstance(model, (BERT4Rec, BERT4RecWithHF)):
-            logits = model(tokens)
+        logits = model(tokens, labels)
 
         if isinstance(criterion, (BPRLoss)):
             pos_score = torch.gather(logits, -1, labels.unsqueeze(-1))
@@ -62,10 +59,8 @@ def eval(
             users = users.to(device)
             negs = negs.to(device)
 
-            if isinstance(model, (MLPBERT4Rec, MLPRec)):
-                logits = model(tokens, labels)
-            if isinstance(model, (BERT4Rec, BERT4RecWithHF)):
-                logits = model(tokens)
+            logits = model(tokens, labels)
+            
             if mode == "valid":
                 if isinstance(criterion, (BPRLoss)):
                     pos_score = torch.gather(logits, -1, labels.unsqueeze(-1))
