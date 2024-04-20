@@ -90,10 +90,70 @@ def main():
     num_user = metadata["num of user"]
     num_item = metadata["num of item"]
     num_cat = len(items_by_prod_type)
+    
+    gen_img_emb = torch.load(f"{path}/gen_img_emb.pt")  # dim : ((num_item)*512*3)
+    
+    text_emb = None
+    if model_args["cat_text"]:
+        text_emb = torch.load(f"{path}/cat_text_embeddings.pt")
+    elif model_args["detail_text"]:
+        text_emb = torch.load(f"{path}/detail_text_embeddings.pt")
 
-    train_dataset = BERTDataset(train_data, sim_matrix, num_user, num_item, model_args["max_len"], model_args["mask_prob"])
-    valid_dataset = BERTTestDataset(valid_data, sim_matrix, num_user, num_item, model_args["max_len"])
-    test_dataset = BERTTestDataset(test_data, sim_matrix, num_user, num_item, model_args["max_len"])
+    train_dataset = BERTDataset(
+        user_seq=train_data,
+        sim_matrix=sim_matrix, 
+        num_user=num_user, 
+        num_item=num_item,
+        num_cat=num_cat,
+        gen_img_emb=gen_img_emb,
+        item_prod_type=item_prod_type,
+        text_emb=text_emb,
+        neg_size=settings["neg_size"], 
+        neg_sample_size=settings["neg_sample_size"], 
+        max_len=model_args["max_len"], 
+        mask_prob=model_args["mask_prob"], 
+        num_gen_img=model_args["num_gen_img"], 
+        img_noise=model_args["img_noise"],
+        std=model_args["std"],
+        mean=model_args["mean"],
+        mlp_cat=model_args["mlp_cat"]
+    )
+    valid_dataset = BERTTestDataset(
+        valid_data, 
+        sim_matrix, 
+        num_user, 
+        num_item, 
+        num_cat,
+        gen_img_emb, 
+        item_prod_type,
+        text_emb,
+        settings["neg_size"], 
+        settings["neg_sample_size"], 
+        model_args["max_len"],
+        model_args["num_gen_img"],
+        model_args["img_noise"],
+        model_args["std"],
+        model_args["mean"],
+        model_args["mlp_cat"]
+    )
+    test_dataset = BERTTestDataset(
+        test_data, 
+        sim_matrix, 
+        num_user, 
+        num_item, 
+        num_cat,
+        gen_img_emb, 
+        item_prod_type,
+        text_emb,
+        settings["neg_size"], 
+        settings["neg_sample_size"], 
+        model_args["max_len"],
+        model_args["num_gen_img"],
+        model_args["img_noise"],
+        model_args["std"],
+        model_args["mean"],
+        model_args["mlp_cat"]
+    )
 
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)
     valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, num_workers=num_workers)
@@ -106,17 +166,6 @@ def main():
     model_class_ = getattr(models, model_name)
     
     if model_name in ("MLPBERT4Rec", "MLPRec"):
-        gen_img_emb = torch.load(f"{path}/gen_img_emb.pt")  # dim : ((num_item)*512*3)
-        text_emb = None
-
-        # if settings["cat_text"] and settings["detail_text"]:
-        #     raise Exception()   # TODO: raise exception with better exception with message
-        
-        if model_args["cat_text"]:
-            text_emb = torch.load(f"{path}/cat_text_embeddings.pt")
-        elif model_args["detail_text"]:
-            text_emb = torch.load(f"{path}/detail_text_embeddings.pt")
-        
         model_args["gen_img_emb"] = gen_img_emb
         model_args["text_emb"] = text_emb
     

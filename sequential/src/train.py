@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from src.models import BERT4RecWithHF, BPRLoss, MLPBERT4Rec
+from src.models import BERT4RecWithHF, BPRLoss, MLPBERT4Rec, BERT4Rec, MLPRec
 from src.utils import simple_ndcg_at_k_batch, simple_recall_at_k_batch
 from torch import nn
 from tqdm import tqdm
@@ -10,12 +10,18 @@ def train(model, optimizer, scheduler, dataloader, criterion, device):
     model.train()
     total_loss = 0
 
-    for tokens, labels, negs in tqdm(dataloader):
+    for tokens, gen_img, labels, negs in tqdm(dataloader):
         tokens = tokens.to(device)
+        gen_img = gen_img.to(device)
         labels = labels.to(device)
         negs = negs.to(device)
 
-        logits = model(tokens, labels)
+        if isinstance(model, MLPBERT4Rec):
+            logits = model(log_seqs=tokens, gen_img=gen_img, labels=labels)
+        elif isinstance(model, BERT4Rec):
+            logits = model(log_seqs=tokens, labels=labels)
+        elif isinstance(model, MLPRec):
+            logits = model(gen_img)
 
         if isinstance(criterion, (BPRLoss)):
             pos_score = torch.gather(logits, -1, labels.unsqueeze(-1))
@@ -53,13 +59,19 @@ def eval(
     pred_list = []
 
     with torch.no_grad():
-        for idx, (users, tokens, labels, negs) in enumerate(tqdm(dataloader)):
+        for idx, (users, tokens, gen_img, labels, negs) in enumerate(tqdm(dataloader)):
             tokens = tokens.to(device)
+            gen_img = gen_img.to(device)
             labels = labels.to(device)
             users = users.to(device)
             negs = negs.to(device)
 
-            logits = model(tokens, labels)
+            if isinstance(model, MLPBERT4Rec):
+                logits = model(log_seqs=tokens, gen_img=gen_img, labels=labels)
+            elif isinstance(model, BERT4Rec):
+                logits = model(log_seqs=tokens, labels=labels)
+            elif isinstance(model, MLPRec):
+                logits = model(gen_img)
             
             if mode == "valid":
                 if isinstance(criterion, (BPRLoss)):
