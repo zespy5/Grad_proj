@@ -95,9 +95,9 @@ def main():
     
     text_emb = None
     if model_args["cat_text"]:
-        text_emb = torch.load(f"{path}/cat_text_embeddings.pt")
+        text_emb = torch.load(f"{path}/cat_text_embeddings.pt") # dim : 82*512
     elif model_args["detail_text"]:
-        text_emb = torch.load(f"{path}/detail_text_embeddings.pt")
+        text_emb = torch.load(f"{path}/detail_text_embeddings.pt") # dim : 60233*512
 
     train_dataset = BERTDataset(
         user_seq=train_data,
@@ -107,6 +107,7 @@ def main():
         num_cat=num_cat,
         gen_img_emb=gen_img_emb,
         item_prod_type=item_prod_type,
+        idx_groups=id_group_dict,
         text_emb=text_emb,
         neg_size=settings["neg_size"], 
         neg_sample_size=settings["neg_sample_size"], 
@@ -126,6 +127,7 @@ def main():
         num_cat,
         gen_img_emb, 
         item_prod_type,
+        id_group_dict,
         text_emb,
         settings["neg_size"], 
         settings["neg_sample_size"], 
@@ -144,6 +146,7 @@ def main():
         num_cat,
         gen_img_emb, 
         item_prod_type,
+        id_group_dict,
         text_emb,
         settings["neg_size"], 
         settings["neg_sample_size"], 
