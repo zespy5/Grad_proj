@@ -253,7 +253,6 @@ class MLPRec(nn.Module):
         super(MLPRec, self).__init__()
         
         self.num_item = num_item
-        self.num_cat = num_cat
         self.item_prod_type = item_prod_type
         self.device = device
         self.num_gen_img = num_gen_img
@@ -301,7 +300,7 @@ class MLPBERT4Rec(nn.Module):
     def __init__(
         self,
         num_item: int,
-        gen_img_emb: torch.Tensor,
+        gen_img_emb: torch.Tensor,  # TODO: try to remove
         num_cat: int,
         item_prod_type: torch.Tensor,
         idx_groups: Optional[dict] = None,
@@ -315,20 +314,15 @@ class MLPBERT4Rec(nn.Module):
         pos_emb: bool = True,
         cat_emb: bool = False,
         mlp_cat: bool = False,
-        img_noise: bool = False,
-        mean: float = 0,
-        std: float = 1,
         num_mlp_layers: int = 2,
         device: str = "cpu",
         text_emb: Optional[torch.Tensor] = None,
         merge: str = "concat",
-        mode: Literal["bert", "mlp", "all"] = "all",
         **kwargs
     ):
         super(MLPBERT4Rec, self).__init__()
         
         self.num_item = num_item
-        self.num_cat = num_cat
         self.hidden_size = hidden_size
         self.num_attention_heads = num_attention_heads
         self.num_hidden_layers = num_hidden_layers
@@ -337,9 +331,6 @@ class MLPBERT4Rec(nn.Module):
         self.pos_emb = pos_emb
         self.cat_emb = cat_emb
         self.mlp_cat = mlp_cat
-        self.img_noise = img_noise
-        self.std = std
-        self.mean = mean
         self.num_mlp_layers = num_mlp_layers
         self.num_gen_img = num_gen_img
         self.merge = merge
