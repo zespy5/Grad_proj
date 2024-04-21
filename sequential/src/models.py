@@ -300,8 +300,8 @@ class MLPBERT4Rec(nn.Module):
     def __init__(
         self,
         num_item: int,
-        gen_img_emb: torch.Tensor,  # TODO: try to remove
         num_cat: int,
+        gen_img_emb: torch.Tensor,  # TODO: try to remove
         item_prod_type: torch.Tensor,
         idx_groups: Optional[dict] = None,
         hidden_size: int = 256,
@@ -376,14 +376,16 @@ class MLPBERT4Rec(nn.Module):
             idx_groups=idx_groups,
             linear_in_size=in_size,
             hidden_size=hidden_size,
+            num_mlp_layers=num_mlp_layers,
             mlp_cat=mlp_cat,
             text_emb=text_emb,
             use_linear=False,
+            hidden_act=hidden_act,
             device=device,
             **kwargs
         )
         
-        self.out = nn.Linear(in_size // (2 ** num_hidden_layers), self.num_item + 1)
+        self.out = nn.Linear(in_size // (2 ** num_mlp_layers), self.num_item + 1)
     
     def forward(self, log_seqs, gen_img, labels):            
         bert_out = self.bert4rec_module(log_seqs=log_seqs, gen_img=gen_img, labels=labels)
