@@ -47,6 +47,7 @@ class BERTDataset(Dataset):
         self.std = std
         self.mean = mean
         self.mlp_cat = mlp_cat
+        self.num_cat = num_cat
         
     def sampler(self, item, user_seq):
         candidate = np.setdiff1d(self.sim_matrix[item][:3000], user_seq, assume_unique=True)
@@ -131,7 +132,7 @@ class BERTDataset(Dataset):
         )
 
 
-class BERTTestDataset(Dataset):
+class BERTTestDataset(BERTDataset):
     def __init__(self, user_seq, sim_matrix, num_user, num_item, num_cat,
                  gen_img_emb: torch.Tensor,
                  item_prod_type: torch.Tensor,
@@ -145,50 +146,24 @@ class BERTTestDataset(Dataset):
                  mean: float = 0,
                  mlp_cat: bool = False
                  ) -> None:
-        self.user_seq = user_seq
-        self.num_user = num_user
-        self.num_item = num_item
-        self.num_cat = num_cat
-        self.max_len = max_len
-        self.sim_matrix = sim_matrix
-        self.neg_size = neg_size                     #negative sampling
-        self.neg_sample_size = neg_sample_size       #negative sampling
-        self.num_gen_img = num_gen_img
-        self.gen_img_emb = gen_img_emb
-        self.item_prod_type = item_prod_type
-        self.text_emb = text_emb
-        self.img_noise = img_noise
-        self.std = std
-        self.mean = mean
-        self.mlp_cat = mlp_cat
-
-    def sampler(self, item, user_seq):
-        candidate = np.setdiff1d(self.sim_matrix[item][:3000], user_seq, assume_unique=True)
-        return candidate[:self.neg_size+1] #negative sampling
-    
-    def get_img_emb(self, tokens, labels):
-        # TODO: item_ids optimization
-        item_ids = tokens.clone().detach()
-        mask_index = torch.where(item_ids == self.num_item + 1)  # mask 찾기
-        item_ids[mask_index] = labels[mask_index]  # mask의 본래 아이템 번호 찾기
-        item_ids -= 1
-        
-        img_idx = sample([0, 1, 2], k=self.num_gen_img)  # 생성형 이미지 추출
-        img_emb = torch.flatten(self.gen_img_emb[item_ids][:, img_idx, :], start_dim=-2, end_dim=-1)
-        if self.img_noise:
-            img_emb += torch.randn_like(img_emb) * self.std + self.mean
-        elif self.mlp_cat:
-            img_emb = self.item_prod_type[item_ids]
-        elif self.text_emb is not None:
-            if self.text_emb.shape[0] == self.num_item: # detail_text embedding
-                img_emb = self.text_emb[item_ids]
-            elif self.text_emb.shape[0] == self.num_cat:  # category embedding
-                img_emb = self.text_emb[self.item_prod_type[item_ids]]
-                
-        return img_emb
-
-    def __len__(self):
-        return self.num_user
+        super().__init__(
+            user_seq=user_seq,
+            sim_matrix=sim_matrix,
+            num_user=num_user,
+            num_item=num_item,
+            num_cat=num_cat,
+            gen_img_emb=gen_img_emb,
+            item_prod_type=item_prod_type,
+            text_emb=text_emb,
+            neg_size=neg_size,
+            neg_sample_size=neg_sample_size,
+            max_len=max_len,
+            num_gen_img=num_gen_img,
+            img_noise=img_noise,
+            std=std,
+            mean=mean,
+            mlp_cat=mlp_cat
+        )
 
     def __getitem__(self, index):
         tokens = torch.tensor(self.user_seq[index], dtype=torch.long) + 1
