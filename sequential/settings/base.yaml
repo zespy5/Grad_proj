@@ -20,10 +20,10 @@ model_arguments:
   hidden_act: "gelu"      # Activation function for attention, mlp
   num_gen_img: 2          # Number of generated image for mlp input
   mask_prob: 0.4          # Input sequence masking probability
-  category_clue: False    # 
+  category_clue: False    #
   description_group: False # group by same image description
   merge: "mul"            # ways to merge output of bert4rec and image embeddings. One of ["concat", "mul"].
-  cat_text: False         # using embedding of category 
+  cat_text: False          # using embedding of category
   detail_text: False      # using embedding of detail_text of item
 
 neg_size : 50
@@ -43,5 +43,3 @@ dataset: "small"
 data_version: "74651f0ea852d5628ecebb39140421ce929da218"
 
 n_cuda: "0"
-
-

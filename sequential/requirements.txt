@@ -2,3 +2,4 @@ fashion-clip
 wandb
 scikit-learn
 huggingface_hub
+pre-commit

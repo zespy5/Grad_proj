@@ -1,12 +1,12 @@
 import math
 from random import sample
+from typing import Literal, Optional
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import BertConfig, BertForMaskedLM
-from typing import Optional, Literal
 
 
 class ScaledDotProductAttention(nn.Module):
@@ -45,9 +45,15 @@ class MultiHeadAttention(nn.Module):
         residual = enc  # residual connection
         batch_size, seqlen = enc.size(0), enc.size(1)
 
-        Q = self.W_Q(enc).view(batch_size, seqlen, self.num_attention_heads, self.head_units)
-        K = self.W_K(enc).view(batch_size, seqlen, self.num_attention_heads, self.head_units)
-        V = self.W_V(enc).view(batch_size, seqlen, self.num_attention_heads, self.head_units)
+        Q = self.W_Q(enc).view(
+            batch_size, seqlen, self.num_attention_heads, self.head_units
+        )
+        K = self.W_K(enc).view(
+            batch_size, seqlen, self.num_attention_heads, self.head_units
+        )
+        V = self.W_V(enc).view(
+            batch_size, seqlen, self.num_attention_heads, self.head_units
+        )
 
         Q, K, V = Q.transpose(1, 2), K.transpose(1, 2), V.transpose(1, 2)
         output, attn_dist = self.attention(Q, K, V, mask)
@@ -83,10 +89,16 @@ class PositionwiseFeedForward(nn.Module):
 
 
 class BERT4RecBlock(nn.Module):
-    def __init__(self, num_attention_heads, hidden_size, dropout_prob, hidden_act="gelu"):
+    def __init__(
+        self, num_attention_heads, hidden_size, dropout_prob, hidden_act="gelu"
+    ):
         super(BERT4RecBlock, self).__init__()
-        self.attention = MultiHeadAttention(num_attention_heads, hidden_size, dropout_prob)
-        self.pointwise_feedforward = PositionwiseFeedForward(hidden_size, dropout_prob, hidden_act)
+        self.attention = MultiHeadAttention(
+            num_attention_heads, hidden_size, dropout_prob
+        )
+        self.pointwise_feedforward = PositionwiseFeedForward(
+            hidden_size, dropout_prob, hidden_act
+        )
 
     def forward(self, input_enc, mask):
         output_enc, attn_dist = self.attention(input_enc, mask)
@@ -137,7 +149,9 @@ class BERT4RecWithHF(nn.Module):
         if not pos_emb:
             # remove pos_emb
             pos_emb_shape = self.bert.bert.embeddings.position_embeddings.weight.shape
-            self.bert.bert.embeddings.position_embeddings.weight.data = torch.zeros(pos_emb_shape)
+            self.bert.bert.embeddings.position_embeddings.weight.data = torch.zeros(
+                pos_emb_shape
+            )
             self.bert.bert.embeddings.position_embeddings.weight.requires_grad = False
 
     def forward(self, tokens):
@@ -150,15 +164,17 @@ class BERT4RecWithHF(nn.Module):
         )
 
         return output.logits
-    
-    
+
+
 class BERT4Rec(nn.Module):
     def __init__(
         self,
         num_item: int,
         num_cat: int,
         idx_groups: Optional[dict] = None,
-        linear_in_size: Optional[int] = None,   # TODO: raise warning if this parameter is set and use_linear is False, and vice versa.
+        linear_in_size: Optional[
+            int
+        ] = None,  # TODO: raise warning if this parameter is set and use_linear is False, and vice versa.
         hidden_size: int = 256,
         num_attention_heads: int = 4,
         num_hidden_layers: int = 3,
@@ -167,7 +183,7 @@ class BERT4Rec(nn.Module):
         dropout_prob: float = 0.2,
         pos_emb: bool = True,
         cat_emb: bool = False,
-        use_linear: bool = True,    # True if using linear layer at last
+        use_linear: bool = True,  # True if using linear layer at last
         device: str = "cpu",
         **kwargs
     ):
@@ -180,9 +196,9 @@ class BERT4Rec(nn.Module):
         self.cat_emb = cat_emb
         self.use_linear = use_linear
         self.device = device
-        
+
         self.in_size = hidden_size if linear_in_size is None else linear_in_size
-        
+
         self.item_emb = nn.Embedding(num_item + 2, hidden_size, padding_idx=0)
         self.dropout = nn.Dropout(dropout_prob)
         self.emb_layernorm = nn.LayerNorm(hidden_size, eps=1e-6)
@@ -194,14 +210,16 @@ class BERT4Rec(nn.Module):
 
         self.bert = nn.ModuleList(
             [
-                BERT4RecBlock(num_attention_heads, hidden_size, dropout_prob, hidden_act)
+                BERT4RecBlock(
+                    num_attention_heads, hidden_size, dropout_prob, hidden_act
+                )
                 for _ in range(num_hidden_layers)
             ]
         )
-        
+
         if self.use_linear:
             self.out = nn.Linear(self.in_size, self.num_item + 1)
-        
+
     def forward(self, log_seqs, labels, **kwargs):
         # TODO: try to remove this two block(206~214)
         if self.cat_emb is not None:
@@ -210,14 +228,23 @@ class BERT4Rec(nn.Module):
             item_ids[mask_index] = labels[mask_index]  # mask의 본래 아이템 번호 찾기
             item_ids -= 1
         if self.idx_groups is not None:
-            f = lambda x: sample(self.idx_groups[x], k=1)[0] if x != -1 else -1
-            item_ids = np.vectorize(f)(item_ids.detach().cpu())
-            
+            item_ids = np.vectorize(
+                lambda x: sample(self.idx_groups[x], k=1)[0] if x != -1 else -1
+            )(item_ids.detach().cpu())
+
         seqs = self.item_emb(log_seqs).to(self.device)
-        attn_mask = (log_seqs > 0).unsqueeze(1).repeat(1, log_seqs.shape[1], 1).unsqueeze(1).to(self.device)
-        
+        attn_mask = (
+            (log_seqs > 0)
+            .unsqueeze(1)
+            .repeat(1, log_seqs.shape[1], 1)
+            .unsqueeze(1)
+            .to(self.device)
+        )
+
         if self.pos_emb:
-            positions = np.tile(np.array(range(log_seqs.shape[1])), [log_seqs.shape[0], 1])
+            positions = np.tile(
+                np.array(range(log_seqs.shape[1])), [log_seqs.shape[0], 1]
+            )
             seqs += self.positional_emb(torch.tensor(positions).to(self.device))
         if self.cat_emb:
             seqs += self.category_emb(self.item_prod_type[item_ids])
@@ -227,10 +254,11 @@ class BERT4Rec(nn.Module):
         for block in self.bert:
             seqs, _ = block(seqs, attn_mask)
         bert_out = seqs
-        
+
         out = self.out(bert_out) if self.use_linear else bert_out
         return out
-    
+
+
 class MLPRec(nn.Module):
     def __init__(
         self,
@@ -242,7 +270,7 @@ class MLPRec(nn.Module):
         idx_groups: Optional[dict] = None,
         linear_in_size: Optional[int] = None,
         hidden_size: int = 256,
-        num_mlp_layers: int = 2, 
+        num_mlp_layers: int = 2,
         mlp_cat: bool = False,
         text_emb: Optional[torch.Tensor] = None,
         use_linear: bool = True,
@@ -251,20 +279,24 @@ class MLPRec(nn.Module):
         **kwargs
     ):
         super(MLPRec, self).__init__()
-        
+
         self.num_item = num_item
         self.item_prod_type = item_prod_type
         self.device = device
         self.num_gen_img = num_gen_img
         self.gen_img_emb = gen_img_emb.to(self.device) if self.num_gen_img else None
         self.idx_groups = idx_groups
-        self.in_size = self.gen_img_emb.shape[-1] * self.num_gen_img if linear_in_size is None else linear_in_size
+        self.in_size = (
+            self.gen_img_emb.shape[-1] * self.num_gen_img
+            if linear_in_size is None
+            else linear_in_size
+        )
         self.mlp_cat = mlp_cat
         self.text_emb = text_emb
         self.use_linear = use_linear
         self.hidden_act = hidden_act
         self.num_mlp_layers = num_mlp_layers
-        
+
         self.MLP_modules = []
 
         if self.hidden_act == "gelu":
@@ -278,7 +310,7 @@ class MLPRec(nn.Module):
             self.MLP_modules.append(nn.Linear(self.in_size, self.in_size // 2))
             self.MLP_modules.append(self.activate)
             self.in_size = self.in_size // 2
-        
+
         if self.mlp_cat:
             self.category_emb = nn.Embedding(num_cat, hidden_size)
 
@@ -289,13 +321,14 @@ class MLPRec(nn.Module):
     def forward(self, x, **kwargs):
         # gen_img *= (labels != 0).unsqueeze(-1)  # loss 계산에 포함되지 않는 것 0으로 변경
         # mlp_mask = (log_seqs > 0).unsqueeze(-1).repeat(1, 1, gen_img.shape[-1]).to(self.device)
-        
-        out = self.MLP(x)   # TODO: or mlp_merge * mlp_mask?
+
+        out = self.MLP(x)  # TODO: or mlp_merge * mlp_mask?
         if self.use_linear:
             out = self.out(out)
-        
+
         return out
-    
+
+
 class MLPBERT4Rec(nn.Module):
     def __init__(
         self,
@@ -321,7 +354,7 @@ class MLPBERT4Rec(nn.Module):
         **kwargs
     ):
         super(MLPBERT4Rec, self).__init__()
-        
+
         self.num_item = num_item
         self.hidden_size = hidden_size
         self.num_attention_heads = num_attention_heads
@@ -334,12 +367,16 @@ class MLPBERT4Rec(nn.Module):
         self.num_mlp_layers = num_mlp_layers
         self.num_gen_img = num_gen_img
         self.merge = merge
-        self.gen_img_emb = gen_img_emb.to(self.device) if self.num_gen_img else None  # (num_item) X (3*512)
-        self.text_emb = text_emb.to(self.device) if text_emb is not None else text_emb  # (num_item) X (3*512)
+        self.gen_img_emb = (
+            gen_img_emb.to(self.device) if self.num_gen_img else None
+        )  # (num_item) X (3*512)
+        self.text_emb = (
+            text_emb.to(self.device) if text_emb is not None else text_emb
+        )  # (num_item) X (3*512)
 
         self.item_prod_type = item_prod_type.to(self.device)  # [item_id : category]
         self.idx_groups = idx_groups
-        
+
         if self.merge == "concat":
             in_size = self.hidden_size + self.hidden_size * self.mlp_cat
             if self.text_emb is not None:
@@ -349,7 +386,7 @@ class MLPBERT4Rec(nn.Module):
         elif self.merge == "mul":
             in_size = self.gen_img_emb.shape[-1] * self.num_gen_img
             self.mul_linear = nn.Linear(hidden_size, in_size)
-        
+
         self.bert4rec_module = BERT4Rec(
             num_item=num_item,
             num_cat=num_cat,
@@ -366,7 +403,7 @@ class MLPBERT4Rec(nn.Module):
             device=device,
             **kwargs
         )
-        
+
         self.mlp_module = MLPRec(
             num_item=num_item,
             num_cat=num_cat,
@@ -384,15 +421,19 @@ class MLPBERT4Rec(nn.Module):
             device=device,
             **kwargs
         )
-        
-        self.out = nn.Linear(in_size // (2 ** num_mlp_layers), self.num_item + 1)
-    
-    def forward(self, log_seqs, gen_img, labels):            
-        bert_out = self.bert4rec_module(log_seqs=log_seqs, gen_img=gen_img, labels=labels)
-        
+
+        self.out = nn.Linear(in_size // (2**num_mlp_layers), self.num_item + 1)
+
+    def forward(self, log_seqs, gen_img, labels):
+        bert_out = self.bert4rec_module(
+            log_seqs=log_seqs, gen_img=gen_img, labels=labels
+        )
+
         mlp_merge = gen_img * (labels != 0).unsqueeze(-1)  # loss 계산에 포함되지 않는 것 0으로 변경
-        mlp_mask = (log_seqs > 0).unsqueeze(-1).repeat(1, 1, gen_img.shape[-1]).to(self.device)
-        
+        mlp_mask = (
+            (log_seqs > 0).unsqueeze(-1).repeat(1, 1, gen_img.shape[-1]).to(self.device)
+        )
+
         if self.merge == "concat":
             mlp_in = torch.concat([bert_out, mlp_merge * mlp_mask], dim=-1)
         elif self.merge == "mul":
@@ -417,7 +458,6 @@ class RegLoss(nn.Module):
 
 
 class BPRLoss(nn.Module):
-
     def __init__(self, gamma=1e-10):
         super().__init__()
         self.reg_loss = RegLoss()
