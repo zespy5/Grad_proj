@@ -1,4 +1,5 @@
 import os
+import shutil
 
 import dotenv
 import torch
@@ -19,17 +20,21 @@ import wandb
 
 def main():
     ############# SETTING #############
+    setting_yaml_path = "./settings/base.yaml"
+    timestamp = get_timestamp()
+
     seed_everything()
     mk_dir("./model")
     mk_dir("./data")
+    mk_dir(f"./model/{timestamp}")
 
-    timestamp = get_timestamp()
-
-    settings = get_config("./settings/base.yaml")
+    settings = get_config(setting_yaml_path)
 
     model_name: str = settings["model_name"]
     model_args: dict = settings["model_arguments"]
     name = f"work-{timestamp}_" + settings["experiment_name"]
+
+    shutil.copy(setting_yaml_path, f"./model/{timestamp}/setting.yaml")
 
     ############ SET HYPER PARAMS #############
     ## TRAIN ##
@@ -235,8 +240,10 @@ def main():
             )
             print(f"EPOCH : {i+1} | VALID LOSS : {valid_loss}")
             print(
-                f'R10 : {valid_metrics["R10"]} | R20 : {valid_metrics["R20"]} | R40 : {valid_metrics["R40"]} | \
-                  N10 : {valid_metrics["N10"]} | N20 : {valid_metrics["N20"]} | N40 : {valid_metrics["N40"]}'
+                (
+                    f'R10 : {valid_metrics["R10"]} | R20 : {valid_metrics["R20"]} | R40 : {valid_metrics["R40"]} | '
+                    f'N10 : {valid_metrics["N10"]} | N20 : {valid_metrics["N20"]} | N40 : {valid_metrics["N40"]}'
+                )
             )
             wandb.log(
                 {
@@ -249,6 +256,9 @@ def main():
                     "valid_N20": valid_metrics["N20"],
                     "valid_N40": valid_metrics["N40"],
                 }
+            )
+            torch.save(
+                model.state_dict(), f"./model/{timestamp}/model_val_{valid_loss}.pt"
             )
 
     print("-------------EVAL-------------")
@@ -265,11 +275,12 @@ def main():
         device=device,
     )
     print(
-        f'R10 : {test_metrics["R10"]} | R20 : {test_metrics["R20"]} | R40 : {test_metrics["R40"]} | \
-          N10 : {test_metrics["N10"]} | N20 : {test_metrics["N20"]} | N40 : {test_metrics["N40"]}'
+        (
+            f'R10 : {test_metrics["R10"]} | R20 : {test_metrics["R20"]} | R40 : {test_metrics["R40"]} | '
+            f'N10 : {test_metrics["N10"]} | N20 : {test_metrics["N20"]} | N40 : {test_metrics["N40"]}'
+        )
     )
     wandb.log(test_metrics)
-    mk_dir(f"./model/{timestamp}")
     torch.save(pred_list, f"./model/{timestamp}/prediction.pt")
     wandb.save(f"./model/{timestamp}/prediction.pt")
 
