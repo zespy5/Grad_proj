@@ -64,8 +64,11 @@ class BERTDataset(Dataset):
         )
         return candidate[: self.neg_size + 1]  # negative sampling
 
-    def get_img_emb(self, seq):
-        item_ids = seq - 1
+    def get_img_emb(self, tokens, labels):
+        item_ids = tokens.clone().detach()
+        mask_index = torch.where(item_ids == self.num_item + 1)  # mask 찾기
+        item_ids[mask_index] = labels[mask_index]  # mask의 본래 아이템 번호 찾기
+        item_ids -= 1
 
         if self.idx_groups is not None:
             item_ids = np.vectorize(
@@ -145,7 +148,7 @@ class BERTDataset(Dataset):
         mask_len = self.max_len - len(seq)
         seq = nn.ZeroPad1d((mask_len, 0))(seq)
 
-        img_emb = self.get_img_emb(seq)
+        img_emb = self.get_img_emb(tokens, labels)
 
         return (
             tokens,
@@ -219,6 +222,6 @@ class BERTTestDataset(BERTDataset):
         labels = torch.tensor(labels, dtype=torch.long)
         negs = torch.tensor(negs, dtype=torch.long)
 
-        img_emb = self.get_img_emb(labels)
+        img_emb = self.get_img_emb(tokens, labels)
 
         return index, tokens, img_emb, labels, negs
