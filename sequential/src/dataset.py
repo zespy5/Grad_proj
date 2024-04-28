@@ -9,15 +9,6 @@ from torch.utils.data import Dataset
 
 
 class BERTDataset(Dataset):
-    # @classmethod
-    # def __init_gen_img_emb(cls, gen_img_path):
-    #     if hasattr(cls, "__gen_img_path") and cls.__gen_img_path != gen_img_path:
-    #         warnings.warn(f"Warning: Trying to reinitialize generated image embeddings with different path from before. \
-    #             Ignoring incoming path \"{gen_img_path}\".")
-    #     if not hasattr(cls, "GEN_IMG_EMB"):
-    #         cls.GEN_IMG_EMB = torch.load(f"{gen_img_path}/gen_img_emb.pt") # dim : ((num_item)*512*3)
-    #         cls.__gen_img_path = gen_img_path
-
     def __init__(
         self,
         user_seq,
@@ -59,9 +50,7 @@ class BERTDataset(Dataset):
         self.mlp_cat = mlp_cat
 
     def sampler(self, item, user_seq):
-        candidate = np.setdiff1d(
-            self.sim_matrix[item][:3000], user_seq, assume_unique=True
-        )
+        candidate = np.setdiff1d(self.sim_matrix[item][:3000], user_seq, assume_unique=True)
         return candidate[: self.neg_size + 1]  # negative sampling
 
     def get_img_emb(self, tokens, labels):
@@ -71,15 +60,13 @@ class BERTDataset(Dataset):
         item_ids -= 1
 
         if self.idx_groups is not None:
-            item_ids = np.vectorize(
-                lambda x: sample(self.idx_groups[x], k=1)[0] if x != -1 else -1
-            )(item_ids.detach().cpu())
+            item_ids = np.vectorize(lambda x: sample(self.idx_groups[x], k=1)[0] if x != -1 else -1)(
+                item_ids.detach().cpu()
+            )
 
         if self.num_gen_img >= 1:
             img_idx = sample([0, 1, 2], k=self.num_gen_img)  # 생성형 이미지 추출
-            img_emb = torch.flatten(
-                self.gen_img_emb[item_ids][:, img_idx, :], start_dim=-2, end_dim=-1
-            )
+            img_emb = torch.flatten(self.gen_img_emb[item_ids][:, img_idx, :], start_dim=-2, end_dim=-1)
             if self.img_noise:
                 img_emb += torch.randn_like(img_emb) * self.std + self.mean
         elif self.mlp_cat:
@@ -135,9 +122,7 @@ class BERTDataset(Dataset):
         # padding
         tokens = [0] * mask_len + tokens
         labels = [0] * mask_len + labels
-        negs = np.concatenate(
-            [np.zeros((mask_len, self.neg_sample_size)), negs], axis=0
-        )
+        negs = np.concatenate([np.zeros((mask_len, self.neg_sample_size)), negs], axis=0)
         # 3개 뽑기.
 
         tokens = torch.tensor(tokens, dtype=torch.long)
@@ -205,12 +190,7 @@ class BERTTestDataset(BERTDataset):
         labels = [0 for _ in range(self.max_len)]
         negs = np.zeros((self.max_len, self.neg_sample_size))  # 3개 뽑기
         labels[-1] = tokens[-1].item()  # target
-        negs[-1] = (
-            self.sampler(labels[-1] - 1, tokens - 1)[
-                np.random.randint(0, 51, self.neg_sample_size)
-            ]
-            + 1
-        )  # 3개 뽑기
+        negs[-1] = self.sampler(labels[-1] - 1, tokens - 1)[np.random.randint(0, 51, self.neg_sample_size)] + 1  # 3개 뽑기
         tokens[-1] = self.num_item + 1  # masking
 
         tokens = tokens[-self.max_len :]

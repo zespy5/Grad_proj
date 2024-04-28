@@ -85,20 +85,12 @@ def main():
 
     print("-------------LOAD DATA-------------")
     metadata = load_json(f"{path}/metadata.json")
-    item_prod_type = torch.load(
-        f"{path}/item_with_prod_type_idx.pt"
-    )  # tensor(prod_type_idx), index : item_idx
-    items_by_prod_type = torch.load(
-        f"{path}/items_by_prod_type_idx.pt"
-    )  # {prod_type_idx : tensor(item_ids)}
+    item_prod_type = torch.load(f"{path}/item_with_prod_type_idx.pt")  # tensor(prod_type_idx), index : item_idx
+    items_by_prod_type = torch.load(f"{path}/items_by_prod_type_idx.pt")  # {prod_type_idx : tensor(item_ids)}
     train_data = torch.load(f"{path}/train_data.pt")
     valid_data = torch.load(f"{path}/valid_data.pt")
     test_data = torch.load(f"{path}/test_data.pt")
-    id_group_dict = (
-        torch.load(f"{path}/id_group_dict.pt")
-        if settings["model_arguments"]["description_group"]
-        else None
-    )
+    id_group_dict = torch.load(f"{path}/id_group_dict.pt") if settings["model_arguments"]["description_group"] else None
     sim_matrix = torch.load(f"{path}/sim_matrix_sorted.pt")
 
     num_user = metadata["num of user"]
@@ -172,15 +164,9 @@ def main():
         model_args["mlp_cat"],
     )
 
-    train_dataloader = DataLoader(
-        train_dataset, batch_size=batch_size, num_workers=num_workers
-    )
-    valid_dataloader = DataLoader(
-        valid_dataset, batch_size=batch_size, num_workers=num_workers
-    )
-    test_dataloader = DataLoader(
-        test_dataset, batch_size=batch_size, num_workers=num_workers
-    )
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)
+    valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, num_workers=num_workers)
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, num_workers=num_workers)
 
     ############# SETTING FOR TRAIN #############
     device = f"cuda:{n_cuda}" if torch.cuda.is_available() else "cpu"
@@ -207,22 +193,14 @@ def main():
         criterion = nn.CrossEntropyLoss(ignore_index=0)
 
     optimizer = Adam(params=model.parameters(), lr=lr, weight_decay=weight_decay)
-    scheduler = lr_scheduler.LambdaLR(
-        optimizer=optimizer, lr_lambda=lambda epoch: 0.85**epoch
-    )
+    scheduler = lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lambda epoch: 0.85**epoch)
 
     ############# TRAIN AND EVAL #############
     for i in range(epoch):
         print("-------------TRAIN-------------")
-        train_loss = train(
-            model, optimizer, scheduler, train_dataloader, criterion, device
-        )
-        print(
-            f'EPOCH : {i+1} | TRAIN LOSS : {train_loss} | LR : {optimizer.param_groups[0]["lr"]}'
-        )
-        wandb.log(
-            {"loss": train_loss, "epoch": i + 1, "lr": optimizer.param_groups[0]["lr"]}
-        )
+        train_loss = train(model, optimizer, scheduler, train_dataloader, criterion, device)
+        print(f'EPOCH : {i+1} | TRAIN LOSS : {train_loss} | LR : {optimizer.param_groups[0]["lr"]}')
+        wandb.log({"loss": train_loss, "epoch": i + 1, "lr": optimizer.param_groups[0]["lr"]})
 
         if i % settings["valid_step"] == 0:
             print("-------------VALID-------------")
@@ -257,9 +235,7 @@ def main():
                     "valid_N40": valid_metrics["N40"],
                 }
             )
-            torch.save(
-                model.state_dict(), f"./model/{timestamp}/model_val_{valid_loss}.pt"
-            )
+            torch.save(model.state_dict(), f"./model/{timestamp}/model_val_{valid_loss}.pt")
 
     print("-------------EVAL-------------")
     pred_list, test_metrics = eval(
