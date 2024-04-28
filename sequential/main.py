@@ -6,8 +6,6 @@ import torch
 import torch.nn as nn
 import wandb
 from huggingface_hub import snapshot_download
-
-# from src.model import BERT4Rec, BERT4RecWithHF, BPRLoss, MLPBERT4Rec, MLPRec
 from src import models
 from src.dataset import BERTDataset, BERTTestDataset
 from src.models import BPRLoss
