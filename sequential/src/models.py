@@ -6,7 +6,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import BertConfig, BertForMaskedLM
 
 
 class ScaledDotProductAttention(nn.Module):
@@ -92,64 +91,6 @@ class BERT4RecBlock(nn.Module):
         output_enc, attn_dist = self.attention(input_enc, mask)
         output_enc = self.pointwise_feedforward(output_enc)
         return output_enc, attn_dist
-
-
-class BERT4RecWithHF(nn.Module):
-    def __init__(
-        self,
-        num_items,
-        hidden_size=256,
-        num_attention_heads=4,
-        num_hidden_layers=3,
-        hidden_act="gelu",
-        max_len=30,
-        dropout_prob=0.2,
-        pos_emb=False,
-        device="cpu",
-        **kwargs
-    ):
-        super(BERT4RecWithHF, self).__init__()
-
-        self.num_items = num_items
-        self.hidden_size = hidden_size
-        self.hidden_act = hidden_act
-        self.num_hidden_layers = num_hidden_layers
-        self.num_attention_heads = num_attention_heads
-        self.max_len = max_len
-        self.dropout_prob = dropout_prob
-        self.pos_emb = pos_emb
-        self.device = device
-
-        # init BERT
-        bert_config = BertConfig(
-            vocab_size=self.num_items + 2,  # mask, padding
-            hidden_size=self.hidden_size,
-            intermediate_size=4 * self.hidden_size,
-            max_position_embeddings=self.max_len,
-            attention_probs_dropout_prob=self.dropout_prob,
-            hidden_act=self.hidden_act,
-            hidden_dropout_prob=self.dropout_prob,
-            num_attention_heads=self.num_attention_heads,
-            num_hidden_layers=self.num_hidden_layers,
-        )
-        self.bert = BertForMaskedLM(bert_config)
-
-        if not pos_emb:
-            # remove pos_emb
-            pos_emb_shape = self.bert.bert.embeddings.position_embeddings.weight.shape
-            self.bert.bert.embeddings.position_embeddings.weight.data = torch.zeros(pos_emb_shape)
-            self.bert.bert.embeddings.position_embeddings.weight.requires_grad = False
-
-    def forward(self, tokens):
-        token_type_ids = torch.zeros_like(tokens).to(self.device)
-        mask = tokens > 0
-        output = self.bert(
-            tokens,
-            attention_mask=mask,
-            token_type_ids=token_type_ids,
-        )
-
-        return output.logits
 
 
 class BERT4Rec(nn.Module):
