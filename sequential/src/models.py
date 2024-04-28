@@ -1,5 +1,6 @@
 import math
 from random import sample
+from typing import Literal, Optional
 
 import numpy as np
 import torch
@@ -93,59 +94,6 @@ class BERT4RecBlock(nn.Module):
         return output_enc, attn_dist
 
 
-class BERT4Rec(nn.Module):
-    def __init__(
-        self,
-        num_item,
-        hidden_size=256,
-        num_attention_heads=4,
-        num_hidden_layers=3,
-        hidden_act="gelu",
-        max_len=30,
-        dropout_prob=0.2,
-        pos_emb=True,
-        device="cpu",
-    ):
-        super(BERT4Rec, self).__init__()
-
-        self.num_item = num_item
-        self.hidden_size = hidden_size
-        self.num_attention_heads = num_attention_heads
-        self.num_hidden_layers = num_hidden_layers
-        self.hidden_act = hidden_act
-        self.pos_emb = pos_emb
-        self.device = device
-
-        self.item_emb = nn.Embedding(num_item + 2, hidden_size, padding_idx=0)
-        self.positional_emb = nn.Embedding(max_len, hidden_size)
-        self.dropout = nn.Dropout(dropout_prob)
-        self.emb_layernorm = nn.LayerNorm(hidden_size, eps=1e-6)
-
-        self.bert = nn.ModuleList(
-            [
-                BERT4RecBlock(num_attention_heads, hidden_size, dropout_prob, hidden_act)
-                for _ in range(num_hidden_layers)
-            ]
-        )
-
-        self.out = nn.Linear(hidden_size, self.num_item + 1)
-
-    def forward(self, tokens):
-        seqs = self.item_emb(tokens).to(self.device)
-        if self.pos_emb:
-            positions = np.tile(np.array(range(tokens.shape[1])), [tokens.shape[0], 1])
-            seqs += self.positional_emb(torch.tensor(positions).to(self.device))
-        seqs = self.emb_layernorm(self.dropout(seqs))
-
-        mask = (tokens > 0).unsqueeze(1).repeat(1, tokens.shape[1], 1).unsqueeze(1).to(self.device)
-
-        for block in self.bert:
-            seqs, _ = block(seqs, mask)
-
-        out = self.out(seqs)
-        return out
-
-
 class BERT4RecWithHF(nn.Module):
     def __init__(
         self,
@@ -158,6 +106,7 @@ class BERT4RecWithHF(nn.Module):
         dropout_prob=0.2,
         pos_emb=False,
         device="cpu",
+        **kwargs
     ):
         super(BERT4RecWithHF, self).__init__()
 
@@ -203,55 +152,38 @@ class BERT4RecWithHF(nn.Module):
         return output.logits
 
 
-class MLPBERT4Rec(nn.Module):
+class BERT4Rec(nn.Module):
     def __init__(
         self,
-        num_item,
-        gen_img_emb,
-        num_cat,
-        item_prod_type,
-        idx_groups=None,
-        hidden_size=256,
-        num_attention_heads=4,
-        num_hidden_layers=3,
-        hidden_act="gelu",
-        num_gen_img=1,
-        max_len=30,
-        dropout_prob=0.2,
-        pos_emb=False,
-        cat_emb=False,
-        mlp_cat=False,
-        img_noise=False,
-        mean=0,
-        std=1,
-        num_mlp_layers=2,
-        device="cpu",
-        text_emb=None,
-        merge="concat",
+        num_item: int,
+        num_cat: int,
+        idx_groups: Optional[dict] = None,
+        linear_in_size: Optional[
+            int
+        ] = None,  # TODO: raise warning if this parameter is set and use_linear is False, and vice versa.
+        hidden_size: int = 256,
+        num_attention_heads: int = 4,
+        num_hidden_layers: int = 3,
+        hidden_act: Literal["gelu", "mish", "silu"] = "gelu",
+        max_len: int = 30,
+        dropout_prob: float = 0.2,
+        pos_emb: bool = True,
+        cat_emb: bool = False,
+        use_linear: bool = True,  # True if using linear layer at last
+        device: str = "cpu",
+        **kwargs
     ):
-        super(MLPBERT4Rec, self).__init__()
+        super(BERT4Rec, self).__init__()
 
-        self.num_item = num_item
-        self.num_cat = num_cat
+        self.idx_groups = idx_groups
         self.hidden_size = hidden_size
-        self.num_attention_heads = num_attention_heads
-        self.num_hidden_layers = num_hidden_layers
-        self.hidden_act = hidden_act
-        self.device = device
+        self.num_item = num_item
         self.pos_emb = pos_emb
         self.cat_emb = cat_emb
-        self.mlp_cat = mlp_cat
-        self.img_noise = img_noise
-        self.std = std
-        self.mean = mean
-        self.num_mlp_layers = num_mlp_layers
-        self.num_gen_img = num_gen_img
-        self.merge = merge
-        self.gen_img_emb = gen_img_emb.to(self.device) if self.num_gen_img else None  # (num_item) X (3*512)
-        self.text_emb = text_emb.to(self.device) if text_emb is not None else text_emb  # (num_item) X (3*512)
+        self.use_linear = use_linear
+        self.device = device
 
-        self.item_prod_type = item_prod_type.to(self.device)  # [item_id : category]
-        self.idx_groups = idx_groups
+        self.in_size = hidden_size if linear_in_size is None else linear_in_size
 
         self.item_emb = nn.Embedding(num_item + 2, hidden_size, padding_idx=0)
         self.dropout = nn.Dropout(dropout_prob)
@@ -259,7 +191,7 @@ class MLPBERT4Rec(nn.Module):
 
         if self.pos_emb:
             self.positional_emb = nn.Embedding(max_len, hidden_size)
-        if self.cat_emb or self.mlp_cat:
+        if self.cat_emb:
             self.category_emb = nn.Embedding(num_cat, hidden_size)
 
         self.bert = nn.ModuleList(
@@ -269,47 +201,24 @@ class MLPBERT4Rec(nn.Module):
             ]
         )
 
-        # init MLP
-        self.MLP_modules = []
-        if self.merge == "concat":
-            in_size = self.hidden_size + self.hidden_size * self.mlp_cat
-            if self.text_emb is not None:
-                in_size += self.text_emb.shape[-1]
-            if self.num_gen_img:
-                in_size += self.gen_img_emb.shape[-1] * self.num_gen_img
+        if self.use_linear:
+            self.out = nn.Linear(self.in_size, self.num_item + 1)
 
-        if self.merge == "mul":
-            in_size = self.gen_img_emb.shape[-1] * self.num_gen_img
-            self.mul_linear = nn.Linear(hidden_size, in_size)
-
-        if self.hidden_act == "gelu":
-            self.activate = nn.GELU()
-        if self.hidden_act == "mish":
-            self.activate = nn.Mish()
-        if self.hidden_act == "silu":
-            self.activate = nn.SiLU()
-
-        for _ in range(self.num_mlp_layers):
-            self.MLP_modules.append(nn.Linear(in_size, in_size // 2))
-            self.MLP_modules.append(self.activate)
-            in_size = in_size // 2
-
-        self.MLP = nn.Sequential(*self.MLP_modules)
-        self.out = nn.Linear(in_size, self.num_item + 1)
-
-    def forward(self, log_seqs, labels):
-        seqs = self.item_emb(log_seqs).to(self.device)
-        attn_mask = (log_seqs > 0).unsqueeze(1).repeat(1, log_seqs.shape[1], 1).unsqueeze(1).to(self.device)
-
-        if self.cat_emb or self.num_gen_img or self.mlp_cat or self.text_emb is not None:
+    def forward(self, log_seqs, labels, **kwargs):
+        # TODO: try to remove this two block(206~214)
+        if self.cat_emb is not None:
             item_ids = log_seqs.clone().detach()
             mask_index = torch.where(item_ids == self.num_item + 1)  # mask 찾기
             item_ids[mask_index] = labels[mask_index]  # mask의 본래 아이템 번호 찾기
             item_ids -= 1
-
         if self.idx_groups is not None:
-            f = lambda x: sample(self.idx_groups[x], k=1)[0] if x != -1 else -1
-            item_ids = np.vectorize(f)(item_ids.detach().cpu())
+            item_ids = np.vectorize(lambda x: sample(self.idx_groups[x], k=1)[0] if x != -1 else -1)(
+                item_ids.detach().cpu()
+            )
+
+        seqs = self.item_emb(log_seqs).to(self.device)
+        attn_mask = (log_seqs > 0).unsqueeze(1).repeat(1, log_seqs.shape[1], 1).unsqueeze(1).to(self.device)
+
         if self.pos_emb:
             positions = np.tile(np.array(range(log_seqs.shape[1])), [log_seqs.shape[0], 1])
             seqs += self.positional_emb(torch.tensor(positions).to(self.device))
@@ -320,64 +229,47 @@ class MLPBERT4Rec(nn.Module):
 
         for block in self.bert:
             seqs, _ = block(seqs, attn_mask)
-        mlp_in = seqs
+        bert_out = seqs
 
-        if self.num_gen_img:
-            img_idx = sample([0, 1, 2], k=self.num_gen_img)  # 생성형 이미지 추출
-            mlp_merge = torch.flatten(self.gen_img_emb[item_ids][:, :, img_idx, :], start_dim=-2, end_dim=-1)
-            if self.img_noise:
-                mlp_merge += torch.randn_like(mlp_merge) * self.std + self.mean
-
-        if self.mlp_cat:
-            mlp_merge = self.category_emb(self.item_prod_type[item_ids])
-
-        if self.text_emb is not None:
-            if self.text_emb.shape[0] == self.num_item:
-                mlp_merge = self.text_emb[item_ids]
-            if self.text_emb.shape[0] == self.num_cat:
-                mlp_merge = self.text_emb[self.item_prod_type[item_ids]]
-
-        mlp_merge *= (labels != 0).unsqueeze(-1)  # loss 계산에 포함되지 않는 것 0으로 변경
-        mlp_mask = (log_seqs > 0).unsqueeze(-1).repeat(1, 1, mlp_merge.shape[-1]).to(self.device)  # padding 0으로 변경
-
-        if self.merge == "concat":
-            mlp_in = torch.concat([mlp_in, mlp_merge * mlp_mask], dim=-1)
-        if self.merge == "mul":
-            mlp_in = self.mul_linear(mlp_in) * mlp_merge
-
-        out = self.out(self.MLP(mlp_in))
+        out = self.out(bert_out) if self.use_linear else bert_out
         return out
 
 
 class MLPRec(nn.Module):
     def __init__(
         self,
-        num_item,
-        gen_img_emb,
-        idx_groups=None,
-        hidden_act="gelu",
-        num_gen_img=1,
-        img_noise=False,
-        mean=0,
-        std=1,
-        num_mlp_layers=2,
-        device="cpu",
+        num_item: int,
+        num_cat: int,
+        item_prod_type: torch.Tensor,
+        gen_img_emb: torch.Tensor,
+        num_gen_img: int = 1,
+        idx_groups: Optional[dict] = None,
+        linear_in_size: Optional[int] = None,
+        hidden_size: int = 256,
+        num_mlp_layers: int = 2,
+        mlp_cat: bool = False,
+        text_emb: Optional[torch.Tensor] = None,
+        use_linear: bool = True,
+        hidden_act: Literal["gelu", "mish", "selu"] = "gelu",
+        device: str = "cpu",
+        **kwargs
     ):
         super(MLPRec, self).__init__()
-        self.num_item = num_item
-        self.idx_groups = idx_groups
-        self.hidden_act = hidden_act
-        self.device = device
-        self.img_noise = img_noise
-        self.std = std
-        self.mean = mean
-        self.num_mlp_layers = num_mlp_layers
-        self.num_gen_img = num_gen_img
-        self.gen_img_emb = gen_img_emb.to(self.device) if self.num_gen_img else gen_img_emb  # (num_item) X (3*512)
 
-        # init MLP
+        self.num_item = num_item
+        self.item_prod_type = item_prod_type
+        self.device = device
+        self.num_gen_img = num_gen_img
+        self.gen_img_emb = gen_img_emb.to(self.device) if self.num_gen_img else None
+        self.idx_groups = idx_groups
+        self.in_size = self.gen_img_emb.shape[-1] * self.num_gen_img if linear_in_size is None else linear_in_size
+        self.mlp_cat = mlp_cat
+        self.text_emb = text_emb
+        self.use_linear = use_linear
+        self.hidden_act = hidden_act
+        self.num_mlp_layers = num_mlp_layers
+
         self.MLP_modules = []
-        in_size = self.gen_img_emb.shape[-1] * self.num_gen_img
 
         if self.hidden_act == "gelu":
             self.activate = nn.GELU()
@@ -387,29 +279,131 @@ class MLPRec(nn.Module):
             self.activate = nn.SiLU()
 
         for _ in range(self.num_mlp_layers):
-            self.MLP_modules.append(nn.Linear(in_size, in_size // 2))
+            self.MLP_modules.append(nn.Linear(self.in_size, self.in_size // 2))
             self.MLP_modules.append(self.activate)
-            in_size = in_size // 2
+            self.in_size = self.in_size // 2
+
+        if self.mlp_cat:
+            self.category_emb = nn.Embedding(num_cat, hidden_size)
 
         self.MLP = nn.Sequential(*self.MLP_modules)
-        self.out = nn.Linear(in_size, self.num_item + 1)
+        if self.use_linear:
+            self.out = nn.Linear(self.in_size, self.num_item + 1)
 
-    def forward(self, log_seqs, labels):
-        item_ids = log_seqs.clone().detach()
-        mask_index = torch.where(item_ids == self.num_item + 1)  # mask 찾기
-        item_ids[mask_index] = labels[mask_index]  # mask의 본래 아이템 번호 찾기
+    def forward(self, x, **kwargs):
+        # gen_img *= (labels != 0).unsqueeze(-1)  # loss 계산에 포함되지 않는 것 0으로 변경
+        # mlp_mask = (log_seqs > 0).unsqueeze(-1).repeat(1, 1, gen_img.shape[-1]).to(self.device)
 
-        item_ids -= 1
-        if self.idx_groups is not None:
-            f = lambda x: sample(self.idx_groups[x], k=1)[0] if x != -1 else -1
-            item_ids = np.vectorize(f)(item_ids.detach().cpu())
-        img_idx = sample([0, 1, 2], k=self.num_gen_img)  # 생성형 이미지 추출
-        gen_imgs = torch.flatten(self.gen_img_emb[item_ids][:, :, img_idx, :], start_dim=-2, end_dim=-1)
+        out = self.MLP(x)  # TODO: or mlp_merge * mlp_mask?
+        if self.use_linear:
+            out = self.out(out)
 
-        if self.img_noise:
-            gen_imgs += torch.randn_like(gen_imgs) * self.std + self.mean
+        return out
 
-        out = self.out(self.MLP(gen_imgs))
+
+class MLPBERT4Rec(nn.Module):
+    def __init__(
+        self,
+        num_item: int,
+        num_cat: int,
+        gen_img_emb: torch.Tensor,  # TODO: try to remove
+        item_prod_type: torch.Tensor,
+        idx_groups: Optional[dict] = None,
+        hidden_size: int = 256,
+        num_attention_heads: int = 4,
+        num_hidden_layers: int = 3,
+        hidden_act: Literal["gelu", "mish", "silu"] = "gelu",
+        num_gen_img: int = 1,
+        max_len: int = 30,
+        dropout_prob: float = 0.2,
+        pos_emb: bool = True,
+        cat_emb: bool = False,
+        mlp_cat: bool = False,
+        num_mlp_layers: int = 2,
+        device: str = "cpu",
+        text_emb: Optional[torch.Tensor] = None,
+        merge: str = "concat",
+        **kwargs
+    ):
+        super(MLPBERT4Rec, self).__init__()
+
+        self.num_item = num_item
+        self.hidden_size = hidden_size
+        self.num_attention_heads = num_attention_heads
+        self.num_hidden_layers = num_hidden_layers
+        self.hidden_act = hidden_act
+        self.device = device
+        self.pos_emb = pos_emb
+        self.cat_emb = cat_emb
+        self.mlp_cat = mlp_cat
+        self.num_mlp_layers = num_mlp_layers
+        self.num_gen_img = num_gen_img
+        self.merge = merge
+        self.gen_img_emb = gen_img_emb.to(self.device) if self.num_gen_img else None  # (num_item) X (3*512)
+        self.text_emb = text_emb.to(self.device) if text_emb is not None else text_emb  # (num_item) X (3*512)
+
+        self.item_prod_type = item_prod_type.to(self.device)  # [item_id : category]
+        self.idx_groups = idx_groups
+
+        if self.merge == "concat":
+            in_size = self.hidden_size + self.hidden_size * self.mlp_cat
+            if self.text_emb is not None:
+                in_size += self.text_emb.shape[-1]
+            if self.num_gen_img:
+                in_size += self.gen_img_emb.shape[-1] * self.num_gen_img
+        elif self.merge == "mul":
+            in_size = self.gen_img_emb.shape[-1] * self.num_gen_img
+            self.mul_linear = nn.Linear(hidden_size, in_size)
+
+        self.bert4rec_module = BERT4Rec(
+            num_item=num_item,
+            num_cat=num_cat,
+            idx_groups=idx_groups,
+            hidden_size=hidden_size,
+            num_attention_heads=num_attention_heads,
+            num_hidden_layers=num_hidden_layers,
+            hidden_act=hidden_act,
+            max_len=max_len,
+            dropout_prob=dropout_prob,
+            pos_emb=pos_emb,
+            cat_emb=cat_emb,
+            use_linear=False,
+            device=device,
+            **kwargs
+        )
+
+        self.mlp_module = MLPRec(
+            num_item=num_item,
+            num_cat=num_cat,
+            item_prod_type=item_prod_type,
+            gen_img_emb=gen_img_emb,
+            num_gen_img=num_gen_img,
+            idx_groups=idx_groups,
+            linear_in_size=in_size,
+            hidden_size=hidden_size,
+            num_mlp_layers=num_mlp_layers,
+            mlp_cat=mlp_cat,
+            text_emb=text_emb,
+            use_linear=False,
+            hidden_act=hidden_act,
+            device=device,
+            **kwargs
+        )
+
+        self.out = nn.Linear(in_size // (2**num_mlp_layers), self.num_item + 1)
+
+    def forward(self, log_seqs, gen_img, labels):
+        bert_out = self.bert4rec_module(log_seqs=log_seqs, gen_img=gen_img, labels=labels)
+
+        mlp_merge = gen_img * (labels != 0).unsqueeze(-1)  # loss 계산에 포함되지 않는 것 0으로 변경
+        mlp_mask = (log_seqs > 0).unsqueeze(-1).repeat(1, 1, gen_img.shape[-1]).to(self.device)
+
+        if self.merge == "concat":
+            mlp_in = torch.concat([bert_out, mlp_merge * mlp_mask], dim=-1)
+        elif self.merge == "mul":
+            mlp_in = self.mul_linear(bert_out) * mlp_merge
+        mlp_out = self.mlp_module(mlp_in)
+        out = self.out(mlp_out)
         return out
 
 
@@ -428,7 +422,6 @@ class RegLoss(nn.Module):
 
 
 class BPRLoss(nn.Module):
-
     def __init__(self, gamma=1e-10):
         super().__init__()
         self.reg_loss = RegLoss()
@@ -442,7 +435,7 @@ class BPRLoss(nn.Module):
         num = torch.sum(is_same)
 
         loss = -torch.log(self.gamma + sig_diff)
-        loss = is_same*loss
+        loss = is_same * loss
         loss = torch.sum(loss) / num
 
         reg_loss = self.reg_loss(parameters)
