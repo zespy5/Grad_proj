@@ -25,7 +25,7 @@ def train(model, optimizer, scheduler, dataloader, criterion, device):
 
         if isinstance(criterion, (BPRLoss)):
             pos_score = torch.gather(logits, -1, labels.unsqueeze(-1))
-            neg_score = torch.gather(logits, -1, negs)  # unsqueeze 안 써도됨.
+            neg_score = torch.gather(logits, -1, negs)
             loss = criterion(pos_score, neg_score, model.parameters())
         if isinstance(criterion, (nn.CrossEntropyLoss)):
             logits = logits.view(-1, logits.size(-1))
@@ -55,7 +55,7 @@ def eval(
     pred_list = []
 
     with torch.no_grad():
-        for idx, (users, tokens, gen_img, labels, negs) in enumerate(tqdm(dataloader)):
+        for users, tokens, gen_img, labels, negs in tqdm(dataloader):
             tokens = tokens.to(device)
             gen_img = gen_img.to(device)
             labels = labels.to(device)
@@ -72,7 +72,7 @@ def eval(
             if mode == "valid":
                 if isinstance(criterion, (BPRLoss)):
                     pos_score = torch.gather(logits, -1, labels.unsqueeze(-1))
-                    neg_score = torch.gather(logits, -1, negs)  # unsqueeze 안 써도됨.
+                    neg_score = torch.gather(logits, -1, negs)
                     loss = criterion(pos_score, neg_score, model.parameters())
                 if isinstance(criterion, (nn.CrossEntropyLoss)):
                     loss = criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
@@ -94,8 +94,7 @@ def eval(
                 pred_list.append(torch.concat((item_rank_batch[:, :40], target_batch.unsqueeze(1)), dim=1))
 
             # rank of items e.g. index: item_id(0~), item_rank[0] : rank of item_id 0
-            item_rank_batch = item_rank_batch.argsort()
-            item_rank_batch = item_rank_batch.gather(dim=1, index=target_batch.view(-1, 1) - 1).squeeze()
+            item_rank_batch = item_rank_batch.argsort().gather(dim=1, index=target_batch.view(-1, 1) - 1).squeeze()
 
             for k in [10, 20, 40]:
                 recall = simple_recall_at_k_batch(k, item_rank_batch)
