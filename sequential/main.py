@@ -4,6 +4,7 @@ import shutil
 import dotenv
 import torch
 import torch.nn as nn
+import wandb
 from huggingface_hub import snapshot_download
 
 # from src.model import BERT4Rec, BERT4RecWithHF, BPRLoss, MLPBERT4Rec, MLPRec
@@ -14,8 +15,6 @@ from src.train import eval, train
 from src.utils import get_config, get_timestamp, load_json, mk_dir, seed_everything
 from torch.optim import Adam, lr_scheduler
 from torch.utils.data import DataLoader
-
-import wandb
 
 
 def main():
@@ -204,16 +203,15 @@ def main():
 
         if i % settings["valid_step"] == 0:
             print("-------------VALID-------------")
-            valid_loss, valid_metrics = eval(
+            (
+                valid_loss,
+                valid_metrics,
+            ) = eval(
                 model=model,
                 mode="valid",
-                category_clue=model_args["category_clue"],
-                num_gen_img=model_args["num_gen_img"],
                 dataloader=valid_dataloader,
                 criterion=criterion,
                 train_data=train_data,
-                item_prod_type=item_prod_type,
-                items_by_prod_type=items_by_prod_type,
                 device=device,
             )
             print(f"EPOCH : {i+1} | VALID LOSS : {valid_loss}")
@@ -241,13 +239,9 @@ def main():
     pred_list, test_metrics = eval(
         model=model,
         mode="test",
-        category_clue=model_args["category_clue"],
-        num_gen_img=model_args["num_gen_img"],
         dataloader=test_dataloader,
         criterion=criterion,
         train_data=train_data,
-        item_prod_type=item_prod_type,
-        items_by_prod_type=items_by_prod_type,
         device=device,
     )
     print(

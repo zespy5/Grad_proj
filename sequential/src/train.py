@@ -44,13 +44,9 @@ def train(model, optimizer, scheduler, dataloader, criterion, device):
 def eval(
     model,
     mode,
-    category_clue,
-    num_gen_img,
     dataloader,
     criterion,
     train_data,
-    item_prod_type,
-    items_by_prod_type,
     device,
 ):
     model.eval()
@@ -90,17 +86,6 @@ def eval(
 
             for i, used_item_list in enumerate(used_items_batch):
                 user_res_batch[i][used_item_list] = user_res_batch[i].max() + 1
-
-            same_cat_item_target = [
-                items_by_prod_type[item_prod_type[target_single - 1].item()] for target_single in target_batch
-            ]
-            if category_clue and (not num_gen_img):
-                mask_batch = torch.ones_like(user_res_batch, dtype=torch.bool).to(device)
-                for i, mask_row in enumerate(same_cat_item_target):
-                    # exclude same category items from index list
-                    mask_batch[i][mask_row] = False
-                    # remove other category items
-                    user_res_batch[i][mask_batch[i]] = user_res_batch[i].max()
 
             # sorted item id e.g. [3452(1st), 7729(2nd), ... ]
             item_rank_batch = user_res_batch.argsort()
