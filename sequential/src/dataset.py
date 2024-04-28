@@ -123,7 +123,6 @@ class BERTDataset(Dataset):
         negs = torch.tensor(negs, dtype=torch.long)
 
         seq = seq[-self.max_len :]
-        mask_len = self.max_len - len(seq)
         seq = nn.ZeroPad1d((mask_len, 0))(seq)
 
         img_emb = self.get_img_emb(tokens, labels)
