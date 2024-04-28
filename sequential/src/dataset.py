@@ -50,8 +50,9 @@ class BERTDataset(Dataset):
         self.mlp_cat = mlp_cat
 
     def sampler(self, item, user_seq):
-        candidate = np.setdiff1d(self.sim_matrix[item][:3000], user_seq, assume_unique=True)
-        return candidate[: self.neg_size + 1]  # negative sampling
+        candidate = np.setdiff1d(self.sim_matrix[item][: self.neg_size], user_seq, assume_unique=True)
+        np.random.shuffle(candidate)
+        return candidate[: self.neg_sample_size]  # negative sampling
 
     def get_img_emb(self, tokens, labels):
         item_ids = tokens.clone().detach()
@@ -100,19 +101,11 @@ class BERTDataset(Dataset):
                 else:
                     tokens.append(s)
                 labels.append(s)
-                negs.append(
-                    self.sampler(
-                        s - 1,
-                        seq - 1,
-                    )[
-                        np.random.randint(0, 51, self.neg_sample_size)
-                    ]  # 3개 뽑기.
-                    + 1
-                )
+                negs.append(self.sampler(s - 1, seq - 1) + 1)
             else:  # not train
                 tokens.append(s)
                 labels.append(0)
-                negs.append(np.zeros(self.neg_sample_size))  # 3개 뽑기.
+                negs.append(np.zeros(self.neg_sample_size))  # neg_sample_size 만큼 뽑기.
 
         tokens = tokens[-self.max_len :]
         labels = labels[-self.max_len :]
@@ -188,9 +181,9 @@ class BERTTestDataset(BERTDataset):
         tokens = torch.tensor(self.user_seq[index], dtype=torch.long) + 1
 
         labels = [0 for _ in range(self.max_len)]
-        negs = np.zeros((self.max_len, self.neg_sample_size))  # 3개 뽑기
+        negs = np.zeros((self.max_len, self.neg_sample_size))
         labels[-1] = tokens[-1].item()  # target
-        negs[-1] = self.sampler(labels[-1] - 1, tokens - 1)[np.random.randint(0, 51, self.neg_sample_size)] + 1  # 3개 뽑기
+        negs[-1] = self.sampler(labels[-1] - 1, tokens - 1) + 1  # neg_sample_size 만큼 뽑기
         tokens[-1] = self.num_item + 1  # masking
 
         tokens = tokens[-self.max_len :]
