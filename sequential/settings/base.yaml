@@ -12,8 +12,6 @@ model_arguments:
   dropout_prob: 0.2       # dropout probability
   num_mlp_layers: 3       # number of mlp layers
   pos_emb: True           # True if using positional embedding
-  cat_emb: False          # True if adding category embedding into input sequence
-  mlp_cat: False          # True if using category embedding as mlp input
   img_noise: True         # Add noise into generated image
   std: 0.01               # noise std(available if img_noise is True)
   mean: 0                 # noise mean(available if img_noise is True)
@@ -22,11 +20,11 @@ model_arguments:
   mask_prob: 0.4          # Input sequence masking probability
   description_group: False # group by same image description
   merge: "mul"            # ways to merge output of bert4rec and image embeddings. One of ["concat", "mul"].
-  cat_text: False          # using embedding of category
   detail_text: False      # using embedding of detail_text of item
 
-neg_size : 50
-neg_sample_size : 5
+neg_size : 50             # number of sampling cadidate oiik
+neg_sample_size : 5       # number of negative sample
+neg_sampling : False      # True if use negative sampling
 
 lr: 0.001
 epoch: 50

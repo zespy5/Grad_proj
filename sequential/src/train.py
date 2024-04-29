@@ -1,6 +1,8 @@
 import numpy as np
 import torch
-from src.models import BERT4Rec, MLPBERT4Rec, MLPRec
+from src.models.bert import BERT4Rec
+from src.models.mlp import MLPRec
+from src.models.mlpbert import MLPBERT4Rec
 from src.utils import simple_ndcg_at_k_batch, simple_recall_at_k_batch
 from tqdm import tqdm
 
@@ -9,18 +11,17 @@ def train(model, optimizer, scheduler, dataloader, criterion, device):
     model.train()
     total_loss = 0
 
-    for tokens, gen_img, labels, negs in tqdm(dataloader):
+    for tokens, modal_emb, labels, _ in tqdm(dataloader):
         tokens = tokens.to(device)
-        gen_img = gen_img.to(device)
+        modal_emb = modal_emb.to(device)
         labels = labels.to(device)
-        negs = negs.to(device)
 
         if isinstance(model, MLPBERT4Rec):
-            logits = model(log_seqs=tokens, gen_img=gen_img, labels=labels)
+            logits = model(log_seqs=tokens, modal_emb=modal_emb, labels=labels)
         elif isinstance(model, BERT4Rec):
             logits = model(log_seqs=tokens, labels=labels)
         elif isinstance(model, MLPRec):
-            logits = model(gen_img)
+            logits = model(modal_emb)
 
         loss = criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
         model.zero_grad()
@@ -46,19 +47,18 @@ def eval(
     pred_list = []
 
     with torch.no_grad():
-        for users, tokens, gen_img, labels, negs in tqdm(dataloader):
+        for users, tokens, modal_emb, labels, _ in tqdm(dataloader):
             tokens = tokens.to(device)
-            gen_img = gen_img.to(device)
+            modal_emb = modal_emb.to(device)
             labels = labels.to(device)
             users = users.to(device)
-            negs = negs.to(device)
 
             if isinstance(model, MLPBERT4Rec):
-                logits = model(log_seqs=tokens, gen_img=gen_img, labels=labels)
+                logits = model(log_seqs=tokens, modal_emb=modal_emb, labels=labels)
             elif isinstance(model, BERT4Rec):
                 logits = model(log_seqs=tokens, labels=labels)
             elif isinstance(model, MLPRec):
-                logits = model(gen_img)
+                logits = model(modal_emb)
 
             if mode == "valid":
                 loss = criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
