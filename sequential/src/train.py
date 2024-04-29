@@ -1,8 +1,7 @@
 import numpy as np
 import torch
-from src.models import BERT4Rec, BPRLoss, MLPBERT4Rec, MLPRec
+from src.models import BERT4Rec, MLPBERT4Rec, MLPRec
 from src.utils import simple_ndcg_at_k_batch, simple_recall_at_k_batch
-from torch import nn
 from tqdm import tqdm
 
 
@@ -23,15 +22,7 @@ def train(model, optimizer, scheduler, dataloader, criterion, device):
         elif isinstance(model, MLPRec):
             logits = model(gen_img)
 
-        if isinstance(criterion, (BPRLoss)):
-            pos_score = torch.gather(logits, -1, labels.unsqueeze(-1))
-            neg_score = torch.gather(logits, -1, negs)
-            loss = criterion(pos_score, neg_score, model.parameters())
-        if isinstance(criterion, (nn.CrossEntropyLoss)):
-            logits = logits.view(-1, logits.size(-1))
-            labels = labels.view(-1)
-            loss = criterion(logits, labels)
-
+        loss = criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
         model.zero_grad()
         loss.backward()
         optimizer.step()
@@ -70,17 +61,10 @@ def eval(
                 logits = model(gen_img)
 
             if mode == "valid":
-                if isinstance(criterion, (BPRLoss)):
-                    pos_score = torch.gather(logits, -1, labels.unsqueeze(-1))
-                    neg_score = torch.gather(logits, -1, negs)
-                    loss = criterion(pos_score, neg_score, model.parameters())
-                if isinstance(criterion, (nn.CrossEntropyLoss)):
-                    loss = criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
-
+                loss = criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
                 total_loss += loss.item()
 
             used_items_batch = [np.unique(train_data[user]) for user in users.cpu().numpy()]
-
             target_batch = labels[:, -1]
             user_res_batch = -logits[:, -1, 1:]
 

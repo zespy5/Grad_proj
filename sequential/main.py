@@ -8,7 +8,6 @@ import wandb
 from huggingface_hub import snapshot_download
 from src import models
 from src.dataset import BERTDataset, BERTTestDataset
-from src.models import BPRLoss
 from src.train import eval, train
 from src.utils import get_config, get_timestamp, load_json, mk_dir, seed_everything
 from torch.optim import Adam, lr_scheduler
@@ -40,7 +39,6 @@ def main():
     batch_size = settings["batch_size"]
     weight_decay = settings["weight_decay"]
     num_workers = settings["num_workers"]
-    loss = settings["loss"]
 
     ## DATA ##
     data_local = settings["data_local"]
@@ -184,10 +182,7 @@ def main():
         device=device,
     ).to(device)
 
-    if loss == "BPR":
-        criterion = BPRLoss()
-    if loss == "CE":
-        criterion = nn.CrossEntropyLoss(ignore_index=0)
+    criterion = nn.CrossEntropyLoss(ignore_index=0)
 
     optimizer = Adam(params=model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lambda epoch: 0.85**epoch)
