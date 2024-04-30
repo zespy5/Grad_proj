@@ -1,4 +1,4 @@
-from typing import Literal, Optional
+from typing import Literal
 
 import numpy as np
 import torch
@@ -23,9 +23,6 @@ class BERT4Rec(nn.Module):
     def __init__(
         self,
         num_item: int,
-        linear_in_size: Optional[
-            int
-        ] = None,  # TODO: raise warning if this parameter is set and use_linear is False, and vice versa.
         hidden_size: int = 256,
         num_attention_heads: int = 4,
         num_hidden_layers: int = 3,
@@ -44,8 +41,7 @@ class BERT4Rec(nn.Module):
         self.pos_emb = pos_emb
         self.use_linear = use_linear
         self.device = device
-
-        self.in_size = hidden_size if linear_in_size is None else linear_in_size
+        self.hidden_size = hidden_size
 
         self.item_emb = nn.Embedding(num_item + 2, hidden_size, padding_idx=0)
         self.dropout = nn.Dropout(dropout_prob)
@@ -62,7 +58,7 @@ class BERT4Rec(nn.Module):
         )
 
         if self.use_linear:
-            self.out = nn.Linear(self.in_size, self.num_item + 1)
+            self.out = nn.Linear(self.hidden_size, self.num_item + 1)
 
     def forward(self, log_seqs, **kwargs):
         seqs = self.item_emb(log_seqs).to(self.device)

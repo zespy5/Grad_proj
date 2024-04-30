@@ -6,8 +6,10 @@ import torch
 import torch.nn as nn
 import wandb
 from huggingface_hub import snapshot_download
-from src import models
 from src.dataset import BERTDataset, BERTTestDataset
+from src.models.bert import BERT4Rec
+from src.models.mlp import MLPRec
+from src.models.mlpbert import MLPBERT4Rec
 from src.train import eval, train
 from src.utils import get_config, get_timestamp, load_json, mk_dir, seed_everything
 from torch.optim import Adam, lr_scheduler
@@ -18,6 +20,7 @@ def main():
     ############# SETTING #############
     setting_yaml_path = "./settings/base.yaml"
     timestamp = get_timestamp()
+    models = {"BERT4Rec": BERT4Rec, "MLPRec": MLPRec, "MLPBERT4Rec": MLPBERT4Rec}  # is it proper?
 
     seed_everything()
     mk_dir("./model")
@@ -88,7 +91,7 @@ def main():
     gen_img_emb = torch.load(f"{path}/gen_img_emb.pt") if model_args["num_gen_img"] else None
     text_emb = torch.load(f"{path}/detail_text_embeddings.pt") if model_args["detail_text"] else None
     id_group_dict = torch.load(f"{path}/id_group_dict.pt") if model_args["description_group"] else None
-    sim_matrix = torch.load(f"{path}/sim_matrix_sorted.pt") if settings["neg_sampling"] else None
+    sim_matrix = torch.load(f"{path}/sim_matrix_sorted.pt")
 
     num_user = metadata["num of user"]
     num_item = metadata["num of item"]
@@ -154,11 +157,18 @@ def main():
     device = f"cuda:{n_cuda}" if torch.cuda.is_available() else "cpu"
 
     ## MODEL INIT ##
-    model_class_ = getattr(models, model_name)
+    model_class_ = models[model_name]
 
     if model_name in ("MLPBERT4Rec", "MLPRec"):
         model_args["gen_img_emb"] = gen_img_emb
         model_args["text_emb"] = text_emb
+    else:
+        model_args["gen_img_emb"], model_args["text_emb"] = None, None
+
+    if model_args["gen_img_emb"] is not None:
+        model_args["linear_in_size"] = model_args["gen_img_emb"].shape[-1] * model_args["num_gen_img"]
+    if model_args["text_emb"] is not None:
+        model_args["linear_in_size"] = model_args["text_emb"].shape[-1]
 
     model = model_class_(
         **model_args,

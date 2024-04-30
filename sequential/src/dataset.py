@@ -55,6 +55,7 @@ class BERTDataset(Dataset):
         mask_index = torch.where(item_ids == self.num_item + 1)  # find mask
         item_ids[mask_index] = labels[mask_index]  # recover mask's original id
         item_ids -= 1
+        modal_emb = torch.tensor([])
 
         if self.idx_groups is not None:
             item_ids = np.vectorize(lambda x: sample(self.idx_groups[x], k=1)[0] if x != -1 else -1)
@@ -92,13 +93,11 @@ class BERTDataset(Dataset):
                 else:
                     tokens.append(s)
                 labels.append(s)
-                if self.neg_sampling:
-                    negs.append(self.neg_sampler(s - 1, seq - 1) + 1)
+                negs.append(self.neg_sampler(s - 1, seq - 1) + 1)
             else:
                 tokens.append(s)
                 labels.append(0)
-                if self.neg_sampling:
-                    negs.append(np.zeros(self.neg_sample_size))
+                negs.append(np.zeros(self.neg_sample_size))
 
         tokens = tokens[-self.max_len :]
         labels = labels[-self.max_len :]
@@ -171,8 +170,7 @@ class BERTTestDataset(BERTDataset):
 
         labels[-1] = tokens[-1].item()  # target
         tokens[-1] = self.num_item + 1  # masking
-        if self.neg_sampling:
-            negs[-1] = self.neg_sampler(labels[-1] - 1, tokens - 1) + 1
+        negs[-1] = self.neg_sampler(labels[-1] - 1, tokens - 1) + 1
 
         tokens = tokens[-self.max_len :]
         mask_len = self.max_len - len(tokens)

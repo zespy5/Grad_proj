@@ -11,12 +11,11 @@ class MLPBERT4Rec(nn.Module):
     def __init__(
         self,
         num_item: int,
-        modal_emb_size: int,
+        linear_in_size: int,
         hidden_size: int = 256,
         num_attention_heads: int = 4,
         num_hidden_layers: int = 3,
         hidden_act: Literal["gelu", "mish", "silu"] = "gelu",
-        num_gen_img: int = 1,
         max_len: int = 30,
         dropout_prob: float = 0.2,
         pos_emb: bool = True,
@@ -28,7 +27,7 @@ class MLPBERT4Rec(nn.Module):
         super(MLPBERT4Rec, self).__init__()
 
         self.num_item = num_item
-        self.modal_emb_size = modal_emb_size
+        self.linear_in_size = linear_in_size
         self.hidden_size = hidden_size
         self.num_attention_heads = num_attention_heads
         self.num_hidden_layers = num_hidden_layers
@@ -36,13 +35,13 @@ class MLPBERT4Rec(nn.Module):
         self.device = device
         self.pos_emb = pos_emb
         self.num_mlp_layers = num_mlp_layers
-        self.num_gen_img = num_gen_img
         self.merge = merge
 
         if self.merge == "concat":
-            in_size = self.hidden_size + self.modal_emb_size
+            in_size = self.hidden_size + self.linear_in_size
         elif self.merge == "mul":
-            self.mul_linear = nn.Linear(hidden_size, modal_emb_size)
+            in_size = self.linear_in_size if self.linear_in_size else self.hidden_size
+            self.mul_linear = nn.Linear(hidden_size, in_size)
 
         self.bert4rec_module = BERT4Rec(
             num_item=num_item,
@@ -60,7 +59,6 @@ class MLPBERT4Rec(nn.Module):
 
         self.mlp_module = MLPRec(
             num_item=num_item,
-            num_gen_img=num_gen_img,
             linear_in_size=in_size,
             num_mlp_layers=num_mlp_layers,
             use_linear=False,
@@ -71,16 +69,22 @@ class MLPBERT4Rec(nn.Module):
 
         self.out = nn.Linear(in_size // (2**num_mlp_layers), self.num_item + 1)
 
-    def forward(self, log_seqs, modal_emb, labels):
-        bert_out = self.bert4rec_module(log_seqs=log_seqs, modal_emb=modal_emb)
+    def make_mlp_in(self, labels, log_seqs, bert_out, modal_emb):
+        if not modal_emb.shape[-1]:
+            return bert_out
+
         mlp_merge = modal_emb * (labels != 0).unsqueeze(-1)  # loss 계산에 포함되지 않는 것 0으로 변경
-        mlp_mask = (log_seqs > 0).unsqueeze(-1).repeat(1, 1, self.modal_emb_size).to(self.device)
+        mlp_mask = (log_seqs > 0).unsqueeze(-1).repeat(1, 1, self.linear_in_size).to(self.device)
 
         if self.merge == "concat":
             mlp_in = torch.concat([bert_out, mlp_merge * mlp_mask], dim=-1)
-        elif self.merge == "mul":
+        if self.merge == "mul":
             mlp_in = self.mul_linear(bert_out) * mlp_merge
+        return mlp_in
 
+    def forward(self, log_seqs, modal_emb, labels):
+        bert_out = self.bert4rec_module(log_seqs=log_seqs, modal_emb=modal_emb)
+        mlp_in = self.make_mlp_in(labels, log_seqs, bert_out, modal_emb)
         mlp_out = self.mlp_module(mlp_in)
         out = self.out(mlp_out)
 

@@ -58,18 +58,13 @@ class MultiHeadAttention(nn.Module):
 class PositionwiseFeedForward(nn.Module):
     def __init__(self, hidden_size, dropout_prob, hidden_act="gelu"):
         super(PositionwiseFeedForward, self).__init__()
+        activates = {"gelu": nn.GELU(), "mish": nn.Mish(), "silu": nn.SiLU()}
 
         self.W_1 = nn.Linear(hidden_size, 4 * hidden_size)
         self.W_2 = nn.Linear(4 * hidden_size, hidden_size)
         self.dropout = nn.Dropout(dropout_prob)
         self.layerNorm = nn.LayerNorm(hidden_size, 1e-6)
-
-        if hidden_act == "gelu":
-            self.activate = F.gelu
-        if hidden_act == "mish":
-            self.activate = F.mish
-        if hidden_act == "silu":
-            self.activate = F.silu
+        self.activate = activates[hidden_act]
 
     def forward(self, x):
         residual = x
