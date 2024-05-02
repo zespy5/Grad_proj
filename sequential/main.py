@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import wandb
 from huggingface_hub import snapshot_download
-from src.dataset import BERTDataset, BERTTestDataset
+from src.dataset import BERTDataset, BERTDatasetWithSampling, BERTTestDataset, BERTTestDatasetWithSampling
 from src.models.bert import BERT4Rec
 from src.models.mlp import MLPRec
 from src.models.mlpbert import MLPBERT4Rec
@@ -96,7 +96,10 @@ def main():
     num_user = metadata["num of user"]
     num_item = metadata["num of item"]
 
-    train_dataset = BERTDataset(
+    train_dataset_calss_ = BERTDatasetWithSampling if settings["neg_sampling"] else BERTDataset
+    test_datset_calss_ = BERTTestDatasetWithSampling if settings["neg_sampling"] else BERTTestDataset
+
+    train_dataset = train_dataset_calss_(
         user_seq=train_data,
         sim_matrix=sim_matrix,
         num_user=num_user,
@@ -114,7 +117,7 @@ def main():
         std=model_args["std"],
         mean=model_args["mean"],
     )
-    valid_dataset = BERTTestDataset(
+    valid_dataset = test_datset_calss_(
         valid_data,
         sim_matrix,
         num_user,
@@ -131,7 +134,7 @@ def main():
         model_args["std"],
         model_args["mean"],
     )
-    test_dataset = BERTTestDataset(
+    test_dataset = test_datset_calss_(
         test_data,
         sim_matrix,
         num_user,
