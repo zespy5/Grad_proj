@@ -4,7 +4,6 @@ import shutil
 import dotenv
 import torch
 import torch.nn as nn
-import wandb
 from huggingface_hub import snapshot_download
 from src.dataset import BERTDataset, BERTDatasetWithSampling, BERTTestDataset, BERTTestDatasetWithSampling
 from src.models.bert import BERT4Rec
@@ -14,6 +13,8 @@ from src.train import eval, train
 from src.utils import get_config, get_timestamp, load_json, mk_dir, seed_everything
 from torch.optim import Adam, lr_scheduler
 from torch.utils.data import DataLoader
+
+import wandb
 
 
 def main():
@@ -162,7 +163,7 @@ def main():
     ## MODEL INIT ##
     model_class_ = models[model_name]
 
-    if model_name in ("MLPBERT4Rec", "MLPRec"):
+    if model_name in ("MLPBERT4Rec", "MLPRec", "MLPwithBERTFreeze"):
         model_args["gen_img_emb"] = gen_img_emb
         model_args["text_emb"] = text_emb
     else:
