@@ -4,24 +4,23 @@ import shutil
 import dotenv
 import torch
 import torch.nn as nn
+import wandb
 from huggingface_hub import snapshot_download
-
-# from src.model import BERT4Rec, BERT4RecWithHF, BPRLoss, MLPBERT4Rec, MLPRec
-from src import models
-from src.dataset import BERTDataset, BERTTestDataset
-from src.models import BPRLoss
+from src.dataset import BERTDataset, BERTDatasetWithSampling, BERTTestDataset, BERTTestDatasetWithSampling
+from src.models.bert import BERT4Rec
+from src.models.mlp import MLPRec
+from src.models.mlpbert import MLPBERT4Rec
 from src.train import eval, train
 from src.utils import get_config, get_timestamp, load_json, mk_dir, seed_everything
 from torch.optim import Adam, lr_scheduler
 from torch.utils.data import DataLoader
-
-import wandb
 
 
 def main():
     ############# SETTING #############
     setting_yaml_path = "./settings/base.yaml"
     timestamp = get_timestamp()
+    models = {"BERT4Rec": BERT4Rec, "MLPRec": MLPRec, "MLPBERT4Rec": MLPBERT4Rec}  # is it proper?
 
     seed_everything()
     mk_dir("./model")
@@ -43,7 +42,6 @@ def main():
     batch_size = settings["batch_size"]
     weight_decay = settings["weight_decay"]
     num_workers = settings["num_workers"]
-    loss = settings["loss"]
 
     ## DATA ##
     data_local = settings["data_local"]
@@ -85,36 +83,31 @@ def main():
 
     print("-------------LOAD DATA-------------")
     metadata = load_json(f"{path}/metadata.json")
-    item_prod_type = torch.load(f"{path}/item_with_prod_type_idx.pt")  # tensor(prod_type_idx), index : item_idx
-    items_by_prod_type = torch.load(f"{path}/items_by_prod_type_idx.pt")  # {prod_type_idx : tensor(item_ids)}
     train_data = torch.load(f"{path}/train_data.pt")
     valid_data = torch.load(f"{path}/valid_data.pt")
     test_data = torch.load(f"{path}/test_data.pt")
-    id_group_dict = torch.load(f"{path}/id_group_dict.pt") if settings["model_arguments"]["description_group"] else None
+
+    # conditional DATA
+    gen_img_emb = torch.load(f"{path}/gen_img_emb.pt") if model_args["num_gen_img"] else None
+    text_emb = torch.load(f"{path}/detail_text_embeddings.pt") if model_args["detail_text"] else None
+    id_group_dict = torch.load(f"{path}/id_group_dict.pt") if model_args["description_group"] else None
     sim_matrix = torch.load(f"{path}/sim_matrix_sorted.pt")
 
     num_user = metadata["num of user"]
     num_item = metadata["num of item"]
-    num_cat = len(items_by_prod_type)
 
-    gen_img_emb = torch.load(f"{path}/gen_img_emb.pt")  # dim : ((num_item)*512*3)
+    train_dataset_calss_ = BERTDatasetWithSampling if settings["neg_sampling"] else BERTDataset
+    test_datset_calss_ = BERTTestDatasetWithSampling if settings["neg_sampling"] else BERTTestDataset
 
-    text_emb = None
-    if model_args["cat_text"]:
-        text_emb = torch.load(f"{path}/cat_text_embeddings.pt")  # dim : 82*512
-    elif model_args["detail_text"]:
-        text_emb = torch.load(f"{path}/detail_text_embeddings.pt")  # dim : 60233*512
-
-    train_dataset = BERTDataset(
+    train_dataset = train_dataset_calss_(
         user_seq=train_data,
         sim_matrix=sim_matrix,
         num_user=num_user,
         num_item=num_item,
-        num_cat=num_cat,
         gen_img_emb=gen_img_emb,
-        item_prod_type=item_prod_type,
         idx_groups=id_group_dict,
         text_emb=text_emb,
+        neg_sampling=settings["neg_sampling"],
         neg_size=settings["neg_size"],
         neg_sample_size=settings["neg_sample_size"],
         max_len=model_args["max_len"],
@@ -123,18 +116,16 @@ def main():
         img_noise=model_args["img_noise"],
         std=model_args["std"],
         mean=model_args["mean"],
-        mlp_cat=model_args["mlp_cat"],
     )
-    valid_dataset = BERTTestDataset(
+    valid_dataset = test_datset_calss_(
         valid_data,
         sim_matrix,
         num_user,
         num_item,
-        num_cat,
         gen_img_emb,
-        item_prod_type,
         id_group_dict,
         text_emb,
+        settings["neg_sampling"],
         settings["neg_size"],
         settings["neg_sample_size"],
         model_args["max_len"],
@@ -142,18 +133,16 @@ def main():
         model_args["img_noise"],
         model_args["std"],
         model_args["mean"],
-        model_args["mlp_cat"],
     )
-    test_dataset = BERTTestDataset(
+    test_dataset = test_datset_calss_(
         test_data,
         sim_matrix,
         num_user,
         num_item,
-        num_cat,
         gen_img_emb,
-        item_prod_type,
         id_group_dict,
         text_emb,
+        settings["neg_sampling"],
         settings["neg_size"],
         settings["neg_sample_size"],
         model_args["max_len"],
@@ -161,7 +150,6 @@ def main():
         model_args["img_noise"],
         model_args["std"],
         model_args["mean"],
-        model_args["mlp_cat"],
     )
 
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)
@@ -172,26 +160,27 @@ def main():
     device = f"cuda:{n_cuda}" if torch.cuda.is_available() else "cpu"
 
     ## MODEL INIT ##
-    model_class_ = getattr(models, model_name)
+    model_class_ = models[model_name]
 
     if model_name in ("MLPBERT4Rec", "MLPRec"):
         model_args["gen_img_emb"] = gen_img_emb
         model_args["text_emb"] = text_emb
+    else:
+        model_args["gen_img_emb"], model_args["text_emb"] = None, None
+
+    if model_args["gen_img_emb"] is not None:
+        model_args["linear_in_size"] = model_args["gen_img_emb"].shape[-1] * model_args["num_gen_img"]
+    if model_args["text_emb"] is not None:
+        model_args["linear_in_size"] = model_args["text_emb"].shape[-1]
 
     model = model_class_(
         **model_args,
-        num_cat=num_cat,
         num_item=num_item,
-        item_prod_type=item_prod_type,
         idx_groups=id_group_dict,
         device=device,
     ).to(device)
 
-    if loss == "BPR":
-        criterion = BPRLoss()
-    if loss == "CE":
-        criterion = nn.CrossEntropyLoss(ignore_index=0)
-
+    criterion = nn.CrossEntropyLoss(ignore_index=0)
     optimizer = Adam(params=model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lambda epoch: 0.85**epoch)
 
@@ -204,16 +193,15 @@ def main():
 
         if i % settings["valid_step"] == 0:
             print("-------------VALID-------------")
-            valid_loss, valid_metrics = eval(
+            (
+                valid_loss,
+                valid_metrics,
+            ) = eval(
                 model=model,
                 mode="valid",
-                category_clue=model_args["category_clue"],
-                num_gen_img=model_args["num_gen_img"],
                 dataloader=valid_dataloader,
                 criterion=criterion,
                 train_data=train_data,
-                item_prod_type=item_prod_type,
-                items_by_prod_type=items_by_prod_type,
                 device=device,
             )
             print(f"EPOCH : {i+1} | VALID LOSS : {valid_loss}")
@@ -241,13 +229,9 @@ def main():
     pred_list, test_metrics = eval(
         model=model,
         mode="test",
-        category_clue=model_args["category_clue"],
-        num_gen_img=model_args["num_gen_img"],
         dataloader=test_dataloader,
         criterion=criterion,
         train_data=train_data,
-        item_prod_type=item_prod_type,
-        items_by_prod_type=items_by_prod_type,
         device=device,
     )
     print(
