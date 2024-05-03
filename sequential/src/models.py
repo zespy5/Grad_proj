@@ -106,7 +106,7 @@ class BERT4RecWithHF(nn.Module):
         dropout_prob=0.2,
         pos_emb=False,
         device="cpu",
-        **kwargs
+        **kwargs,
     ):
         super(BERT4RecWithHF, self).__init__()
 
@@ -171,7 +171,7 @@ class BERT4Rec(nn.Module):
         cat_emb: bool = False,
         use_linear: bool = True,  # True if using linear layer at last
         device: str = "cpu",
-        **kwargs
+        **kwargs,
     ):
         super(BERT4Rec, self).__init__()
 
@@ -252,7 +252,7 @@ class MLPRec(nn.Module):
         use_linear: bool = True,
         hidden_act: Literal["gelu", "mish", "selu"] = "gelu",
         device: str = "cpu",
-        **kwargs
+        **kwargs,
     ):
         super(MLPRec, self).__init__()
 
@@ -323,7 +323,7 @@ class MLPBERT4Rec(nn.Module):
         device: str = "cpu",
         text_emb: Optional[torch.Tensor] = None,
         merge: str = "concat",
-        **kwargs
+        **kwargs,
     ):
         super(MLPBERT4Rec, self).__init__()
 
@@ -369,7 +369,7 @@ class MLPBERT4Rec(nn.Module):
             cat_emb=cat_emb,
             use_linear=False,
             device=device,
-            **kwargs
+            **kwargs,
         )
 
         self.mlp_module = MLPRec(
@@ -387,7 +387,7 @@ class MLPBERT4Rec(nn.Module):
             use_linear=False,
             hidden_act=hidden_act,
             device=device,
-            **kwargs
+            **kwargs,
         )
 
         self.out = nn.Linear(in_size // (2**num_mlp_layers), self.num_item + 1)
@@ -405,6 +405,67 @@ class MLPBERT4Rec(nn.Module):
         mlp_out = self.mlp_module(mlp_in)
         out = self.out(mlp_out)
         return out
+
+
+class MLPwithBERTFreeze(MLPBERT4Rec):
+    def __init__(
+        self,
+        num_item: int,
+        num_cat: int,
+        model_ckpt_path: str,
+        gen_img_emb: torch.Tensor,  # TODO: try to remove
+        item_prod_type: torch.Tensor,
+        idx_groups: Optional[dict] = None,
+        hidden_size: int = 256,
+        num_attention_heads: int = 4,
+        num_hidden_layers: int = 3,
+        hidden_act: Literal["gelu", "mish", "silu"] = "gelu",
+        num_gen_img: int = 1,
+        max_len: int = 30,
+        dropout_prob: float = 0.2,
+        pos_emb: bool = True,
+        cat_emb: bool = False,
+        mlp_cat: bool = False,
+        num_mlp_layers: int = 2,
+        device: str = "cpu",
+        text_emb: Optional[torch.Tensor] = None,
+        merge: str = "concat",
+        **kwargs,
+    ):
+        super(MLPwithBERTFreeze, self).__init__(
+            num_item=num_item,
+            num_cat=num_cat,
+            gen_img_emb=gen_img_emb,
+            item_prod_type=item_prod_type,
+            idx_groups=idx_groups,
+            hidden_size=hidden_size,
+            num_attention_heads=num_attention_heads,
+            num_hidden_layers=num_hidden_layers,
+            hidden_act=hidden_act,
+            num_gen_img=num_gen_img,
+            max_len=max_len,
+            dropout_prob=dropout_prob,
+            pos_emb=pos_emb,
+            cat_emb=cat_emb,
+            mlp_cat=mlp_cat,
+            num_mlp_layers=num_mlp_layers,
+            device=device,
+            text_emb=text_emb,
+            merge=merge,
+            **kwargs,
+        )
+
+        bert4rec_weight = torch.load(model_ckpt_path)
+
+        try:
+            incompat_keys = self.bert4rec_module.load_state_dict(bert4rec_weight, strict=False)
+            assert incompat_keys.unexpected_keys == ["out.weight", "out.bias"]
+
+            for param in self.bert4rec_module.parameters():
+                param.requires_grad = False
+        except AssertionError as e:
+            print(f"Unexpected keys: {incompat_keys}")
+            raise e
 
 
 class RegLoss(nn.Module):

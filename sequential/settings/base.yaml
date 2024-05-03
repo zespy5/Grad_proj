@@ -25,6 +25,7 @@ model_arguments:
   merge: "mul"            # ways to merge output of bert4rec and image embeddings. One of ["concat", "mul"].
   cat_text: False          # using embedding of category
   detail_text: False      # using embedding of detail_text of item
+  model_ckpt_path: "./model/0427000421/model_val_9.835206767016421.pt"
 
 neg_size : 50
 neg_sample_size : 5

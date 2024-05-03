@@ -174,7 +174,7 @@ def main():
     ## MODEL INIT ##
     model_class_ = getattr(models, model_name)
 
-    if model_name in ("MLPBERT4Rec", "MLPRec"):
+    if model_name in ("MLPBERT4Rec", "MLPRec", "MLPwithBERTFreeze"):
         model_args["gen_img_emb"] = gen_img_emb
         model_args["text_emb"] = text_emb
 
