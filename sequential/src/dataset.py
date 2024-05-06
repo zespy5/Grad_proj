@@ -53,8 +53,8 @@ class BERTDataset(Dataset):
         modal_emb = torch.tensor([])
 
         if self.idx_groups is not None:
-            item_ids = np.vectorize(lambda x: sample(self.idx_groups[x], k=1)[0] if x != -1 else -1)
-            item_ids = item_ids(item_ids.detach().cpu())
+            item_id_group_sampler = np.vectorize(lambda x: sample(self.idx_groups[x], k=1)[0] if x != -1 else -1)
+            item_ids = item_id_group_sampler(item_ids)
 
         if self.gen_img_emb is not None:
             img_idx = sample([0, 1, 2], k=self.num_gen_img)
