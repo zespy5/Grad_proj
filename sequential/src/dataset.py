@@ -316,3 +316,280 @@ class BERTTestDatasetWithSampling(BERTDatasetWithSampling):
         modal_emb = self.get_modal_emb(tokens, labels)
 
         return index, tokens, modal_emb, labels, negs
+    
+
+class GenDataset(Dataset):
+     
+    def __init__(
+        self,
+        user_seq,
+        num_user,
+        num_item,
+        origin_img_emb: Optional[torch.Tensor],
+        gen_img_emb: Optional[torch.Tensor],
+        idx_groups: Optional[torch.Tensor],
+        num_gen_img: int = 1,
+        max_len: int = 30,
+        mask_prob: float = 0.15,
+        ) -> None:
+
+        self.user_seq = user_seq
+        self.num_user = num_user
+        self.num_item = num_item
+        self.origin_img_emb = origin_img_emb
+        self.gen_img_emb = gen_img_emb
+        self.idx_groups = idx_groups
+        self.num_gen_img = num_gen_img
+        self.max_len = max_len
+        self.mask_prob = mask_prob
+
+        self.pad_index = 0
+        self.mask_index = self.num_item+1
+
+
+    def __len__(self):
+        return self.num_user
+
+    def __getitem__(self, index):
+        user = self.user_seq[index]
+        tokens = []
+        labels = []
+        img_emb = []
+
+        for s in user:
+            prob = random.random()
+            if prob < self.mask_prob:  # train
+                prob /= self.mask_prob
+                # mask_index: num_item + 1, 0: pad, 1~num_item: item index
+                if prob < 0.8:
+                    tokens.append(self.mask_index)
+                elif prob < 0.9:
+                    tokens.append(random.choice(range(1, self.num_item + 1)))
+                else:
+                    tokens.append(s+1)
+                labels.append(s+1)
+                group_sample = sample(self.idx_groups[s], 1)[0]
+                img_emb.append(self.gen_img_emb[group_sample][np.random.randint(3)]) #s는 item idx ( -1 해야할지도?)
+            else:
+                tokens.append(s+1)
+                labels.append(self.pad_index)
+                img_emb.append(self.origin_img_emb[s]) #s는 item idx ( -1 해야할지도?)
+
+
+        tokens = tokens[-self.max_len :]
+        labels = labels[-self.max_len :]
+        mask_len = self.max_len - len(tokens)
+
+        # padding
+        
+        zero_padding1d = nn.ZeroPad1d((mask_len, 0))
+        zero_padding2d = nn.ZeroPad2d((0,0,mask_len,0))
+
+        tokens = torch.tensor(tokens, dtype=torch.long)
+        labels = torch.tensor(labels, dtype=torch.long)
+        tokens = zero_padding1d(tokens)
+        labels = zero_padding1d(labels)
+        
+        img_emb = img_emb[-self.max_len :]
+        modal_emb = torch.stack(img_emb)
+        modal_emb.type(torch.float64)
+        modal_emb = zero_padding2d(modal_emb)
+
+        return (
+            tokens,
+            modal_emb,
+            labels,
+        )
+    
+class TestGenDataset(GenDataset):
+    def __init__(
+        self,
+        user_seq,
+        num_user,
+        num_item,
+        origin_img_emb: Optional[torch.Tensor],
+        gen_img_emb: Optional[torch.Tensor],
+        idx_groups: Optional[torch.Tensor],
+        num_gen_img: int = 1,
+        max_len: int = 30,
+    ) -> None:
+        super().__init__(
+            user_seq=user_seq,
+            num_user=num_user,
+            num_item=num_item,
+            origin_img_emb=origin_img_emb,
+            gen_img_emb=gen_img_emb,
+            idx_groups=idx_groups,
+            num_gen_img=num_gen_img,
+            max_len=max_len
+        )
+
+    def __getitem__(self, index):
+        user = self.user_seq[index]
+        
+        tokens = torch.tensor(user, dtype=torch.long) + 1
+        labels = [0 for _ in range(self.max_len)]
+        img_emb = []
+    
+
+        labels[-1] = tokens[-1].item()  # target
+        tokens[-1] = self.mask_index  # masking
+
+
+        tokens = tokens[-self.max_len :]
+        mask_len = self.max_len - len(tokens)
+        
+        labels = torch.tensor(labels, dtype=torch.long)
+        
+        zero_padding1d = nn.ZeroPad1d((mask_len, 0))
+        zero_padding2d = nn.ZeroPad2d((0,0,mask_len,0))
+        
+        tokens = zero_padding1d(tokens)
+        
+        for i in range(len(user)-1):
+            img_emb.append(self.origin_img_emb[user[i]])
+
+        group_sample = sample(self.idx_groups[user[-1]], 1)[0]
+        img_emb.append(self.gen_img_emb[group_sample][np.random.randint(3)])
+        img_emb = img_emb[-self.max_len:]
+        modal_emb = torch.stack(img_emb)
+        modal_emb.type(torch.float64)
+        modal_emb = zero_padding2d(modal_emb)
+        
+
+        return index, tokens, modal_emb, labels
+
+
+# Description base datasets
+
+class DescriptionDataset(Dataset):
+    def __init__(
+            self,
+            user_seq,
+            num_user,
+            num_item,
+            text_emb :Optional[torch.Tensor],
+            max_len : int = 30,
+            mask_prob : float = 0.15,
+    ) -> None:
+        
+        self.user_seq = user_seq
+        self.num_user = num_user
+        self.num_item = num_item
+        self.max_len = max_len
+        self.mask_prob = mask_prob
+        self.text_emb = text_emb
+
+        self.pad_index = 0
+        self.mask_index = self.num_item+1
+
+    def __len__(self):
+        return self.num_user
+    
+    def __getitem__(self, index):
+        user = self.user_seq[index]
+        tokens = []
+        labels = []
+        embedding = []
+
+        for s in user:
+            prob = random.random()
+            if prob < self.mask_prob:  # train
+                prob /= self.mask_prob
+                # mask_index: num_item + 1, 0: pad, 1~num_item: item index
+                if prob < 0.8:
+                    tokens.append(self.mask_index)
+                elif prob < 0.9:
+                    tokens.append(random.choice(range(1, self.num_item + 1)))
+                else:
+                    tokens.append(s+1)
+                labels.append(s+1)
+                embedding.append(self.text_emb[s])
+            else:
+                tokens.append(s+1)
+                labels.append(self.pad_index)
+                embedding.append(self.text_emb[s]) #s는 item idx ( -1 해야할지도?)
+
+
+        tokens = tokens[-self.max_len :]
+        labels = labels[-self.max_len :]
+        mask_len = self.max_len - len(tokens)
+
+        # padding
+        
+        zero_padding1d = nn.ZeroPad1d((mask_len, 0))
+        zero_padding2d = nn.ZeroPad2d((0,0,mask_len,0))
+
+        tokens = torch.tensor(tokens, dtype=torch.long)
+        labels = torch.tensor(labels, dtype=torch.long)
+        tokens = zero_padding1d(tokens)
+        labels = zero_padding1d(labels)
+        
+        embedding = embedding[-self.max_len :]
+        modal_emb = torch.stack(embedding)
+        modal_emb.type(torch.float64)
+        modal_emb = zero_padding2d(modal_emb)
+
+        
+        
+
+        return (
+            tokens,
+            modal_emb,
+            labels,
+        )
+    
+class TestDescriptionDataset(DescriptionDataset):
+    def __init__(
+            self,
+            user_seq,
+            num_user,
+            num_item,
+            text_emb :Optional[torch.Tensor],
+            max_len : int = 30,
+            mask_prob : float = 0.15,
+    ) -> None:
+        
+        super().__init__(
+            user_seq=user_seq,
+            num_user=num_user,
+            num_item=num_item,
+            text_emb=text_emb,
+            max_len=max_len,
+            mask_prob=mask_prob
+        )
+
+    def __getitem__(self, index):
+        user = self.user_seq[index]
+        
+        tokens = torch.tensor(user, dtype=torch.long) + 1
+        labels = [0 for _ in range(self.max_len)]
+        embedding = []
+    
+
+        labels[-1] = tokens[-1].item()  # target
+        tokens[-1] = self.mask_index  # masking
+
+
+        tokens = tokens[-self.max_len :]
+        mask_len = self.max_len - len(tokens)
+        
+        labels = torch.tensor(labels, dtype=torch.long)
+        
+        zero_padding1d = nn.ZeroPad1d((mask_len, 0))
+        zero_padding2d = nn.ZeroPad2d((0,0,mask_len,0))
+        
+        tokens = zero_padding1d(tokens)
+        
+        for i in user:
+            embedding.append(self.text_emb[i])
+
+        embedding = embedding[-self.max_len:]
+        modal_emb = torch.stack(embedding)
+        modal_emb.type(torch.float64)
+        modal_emb = zero_padding2d(modal_emb)
+        
+
+        return index, tokens, modal_emb, labels
+
+

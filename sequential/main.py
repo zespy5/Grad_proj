@@ -7,9 +7,11 @@ import torch.nn as nn
 import wandb
 from huggingface_hub import snapshot_download
 from src.dataset import BERTDataset, BERTDatasetWithSampling, BERTTestDataset, BERTTestDatasetWithSampling
+from src.dataset import GenDataset, TestGenDataset, DescriptionDataset, TestDescriptionDataset
 from src.models.bert import BERT4Rec
 from src.models.mlp import MLPRec
 from src.models.mlpbert import MLPBERT4Rec
+from src.models.crossattention import CA4Rec
 from src.train import eval, train
 from src.utils import get_config, get_timestamp, load_json, mk_dir, seed_everything
 from torch.optim import Adam, lr_scheduler
@@ -20,7 +22,7 @@ def main():
     ############# SETTING #############
     setting_yaml_path = "./settings/base.yaml"
     timestamp = get_timestamp()
-    models = {"BERT4Rec": BERT4Rec, "MLPRec": MLPRec, "MLPBERT4Rec": MLPBERT4Rec}  # is it proper?
+    models = {"BERT4Rec": BERT4Rec, "MLPRec": MLPRec, "MLPBERT4Rec": MLPBERT4Rec, "CA4Rec":CA4Rec}  # is it proper?
 
     seed_everything()
     mk_dir("./model")
@@ -88,69 +90,33 @@ def main():
     test_data = torch.load(f"{path}/test_data.pt")
 
     # conditional DATA
-    gen_img_emb = torch.load(f"{path}/gen_img_emb.pt") if model_args["num_gen_img"] else None
-    text_emb = torch.load(f"{path}/detail_text_embeddings.pt") if model_args["detail_text"] else None
-    id_group_dict = torch.load(f"{path}/id_group_dict.pt") if model_args["description_group"] else None
+    # negative sampling
     sim_matrix = torch.load(f"{path}/sim_matrix_sorted.pt")
+
+    # input is text embeddings grouped by description
+    if model_args["detail_text"]:
+        text_emb = torch.load(f"{path}/detail_text_embeddings.pt") 
+
+    # input is generative and origin image grouped by description
+    if model_args["gen_img"]:
+        gen_img_emb = torch.load(f"{path}/gen_img_emb.pt")
+        id_group_dict = torch.load(f"{path}/id_group_dict.pt")
+        origin_img_emb = torch.load(f"{path}/origin_img_emb.pt")
 
     num_user = metadata["num of user"]
     num_item = metadata["num of item"]
 
-    train_dataset_calss_ = BERTDatasetWithSampling if settings["neg_sampling"] else BERTDataset
-    test_datset_calss_ = BERTTestDatasetWithSampling if settings["neg_sampling"] else BERTTestDataset
-
-    train_dataset = train_dataset_calss_(
-        user_seq=train_data,
-        sim_matrix=sim_matrix,
-        num_user=num_user,
-        num_item=num_item,
-        gen_img_emb=gen_img_emb,
-        idx_groups=id_group_dict,
-        text_emb=text_emb,
-        neg_sampling=settings["neg_sampling"],
-        neg_size=settings["neg_size"],
-        neg_sample_size=settings["neg_sample_size"],
-        max_len=model_args["max_len"],
-        mask_prob=model_args["mask_prob"],
-        num_gen_img=model_args["num_gen_img"],
-        img_noise=model_args["img_noise"],
-        std=model_args["std"],
-        mean=model_args["mean"],
-    )
-    valid_dataset = test_datset_calss_(
-        valid_data,
-        sim_matrix,
-        num_user,
-        num_item,
-        gen_img_emb,
-        id_group_dict,
-        text_emb,
-        settings["neg_sampling"],
-        settings["neg_size"],
-        settings["neg_sample_size"],
-        model_args["max_len"],
-        model_args["num_gen_img"],
-        model_args["img_noise"],
-        model_args["std"],
-        model_args["mean"],
-    )
-    test_dataset = test_datset_calss_(
-        test_data,
-        sim_matrix,
-        num_user,
-        num_item,
-        gen_img_emb,
-        id_group_dict,
-        text_emb,
-        settings["neg_sampling"],
-        settings["neg_size"],
-        settings["neg_sample_size"],
-        model_args["max_len"],
-        model_args["num_gen_img"],
-        model_args["img_noise"],
-        model_args["std"],
-        model_args["mean"],
-    )
+    if model_args["gen_img"]:
+        train_dataset = GenDataset(
+            user_seq=train_data,
+            num_user= num_user,
+            origin_img_emb=origin_img_emb,
+            gen_img_emb=gen_img_emb,
+            idx_groups=id_group_dict,
+            num_gen_img=model_args["num_gen_img"],
+            max_len=model_args["max_len"],
+            mask_prob=model_args["mask_prob"]
+        )
 
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)
     valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, num_workers=num_workers)
