@@ -6,8 +6,7 @@ import torch
 import torch.nn as nn
 import wandb
 from huggingface_hub import snapshot_download
-from src.dataset import BERTDataset, BERTDatasetWithSampling, BERTTestDataset, BERTTestDatasetWithSampling
-from src.dataset import GenDataset, TestGenDataset, DescriptionDataset, TestDescriptionDataset
+from src import dataset as DS
 from src.models.bert import BERT4Rec
 from src.models.mlp import MLPRec
 from src.models.mlpbert import MLPBERT4Rec
@@ -33,6 +32,7 @@ def main():
 
     model_name: str = settings["model_name"]
     model_args: dict = settings["model_arguments"]
+    model_dataset : dict = settings["model_dataset"]
     name = f"work-{timestamp}_" + settings["experiment_name"]
 
     shutil.copy(setting_yaml_path, f"./model/{timestamp}/setting.yaml")
@@ -91,7 +91,7 @@ def main():
 
     # conditional DATA
     # negative sampling
-    sim_matrix = torch.load(f"{path}/sim_matrix_sorted.pt")
+    sim_matrix = torch.load(f"{path}/sim_matrix_sorted.pt") if model_args["neg_sampling"] else None
 
     # input is text embeddings grouped by description
     if model_args["detail_text"]:
@@ -99,23 +99,42 @@ def main():
 
     # input is generative and origin image grouped by description
     if model_args["gen_img"]:
-        gen_img_emb = torch.load(f"{path}/gen_img_emb.pt")
-        id_group_dict = torch.load(f"{path}/id_group_dict.pt")
+        gen_img_emb = torch.load(f"{path}/item_idx_gen_embs.pt")
         origin_img_emb = torch.load(f"{path}/origin_img_emb.pt")
 
     num_user = metadata["num of user"]
-    num_item = metadata["num of item"]
+    num_item = metadata["num of item"]    
+
+    print("-------------COMPLETE LOAD DATA-------------")
+
+    common_parameter = {'num_user':num_user,
+                        'num_item':num_item,
+                        'max_len': model_args['max_len'],}
+    
+    train_dataset_class_ = getattr(DS, model_dataset["train_dataset"])
+    test_dataset_class_ = getattr(DS, model_dataset["test_dataset"])
 
     if model_args["gen_img"]:
-        train_dataset = GenDataset(
+        train_dataset = train_dataset_class_(
             user_seq=train_data,
-            num_user= num_user,
             origin_img_emb=origin_img_emb,
             gen_img_emb=gen_img_emb,
-            idx_groups=id_group_dict,
-            num_gen_img=model_args["num_gen_img"],
-            max_len=model_args["max_len"],
-            mask_prob=model_args["mask_prob"]
+            mask_prob=model_args["mask_prob"],
+            **common_parameter
+        )
+
+        valid_dataset = test_dataset_class_(
+            user_seq=valid_data,
+            origin_img_emb=origin_img_emb,
+            gen_img_emb=gen_img_emb,
+            **common_parameter
+        )
+
+        test_dataset = test_dataset_class_(
+            user_seq=test_data,
+            origin_img_emb=origin_img_emb,
+            gen_img_emb=gen_img_emb,
+            **common_parameter
         )
 
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)
@@ -142,13 +161,14 @@ def main():
     model = model_class_(
         **model_args,
         num_item=num_item,
-        idx_groups=id_group_dict,
         device=device,
     ).to(device)
 
     criterion = nn.CrossEntropyLoss(ignore_index=0)
     optimizer = Adam(params=model.parameters(), lr=lr, weight_decay=weight_decay)
-    scheduler = lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lambda epoch: 0.85**epoch)
+    scheduler = lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lambda epoch: 0.95**epoch)
+
+
 
     ############# TRAIN AND EVAL #############
     for i in range(epoch):

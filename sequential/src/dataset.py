@@ -316,19 +316,20 @@ class BERTTestDatasetWithSampling(BERTDatasetWithSampling):
         modal_emb = self.get_modal_emb(tokens, labels)
 
         return index, tokens, modal_emb, labels, negs
-    
+
+
+#Refactoring dataset
 
 class GenDataset(Dataset):
      
     def __init__(
         self,
         user_seq,
-        num_user,
-        num_item,
         origin_img_emb: Optional[torch.Tensor],
         gen_img_emb: Optional[torch.Tensor],
-        idx_groups: Optional[torch.Tensor],
-        num_gen_img: int = 1,
+
+        num_user: int,
+        num_item: int,
         max_len: int = 30,
         mask_prob: float = 0.15,
         ) -> None:
@@ -338,8 +339,6 @@ class GenDataset(Dataset):
         self.num_item = num_item
         self.origin_img_emb = origin_img_emb
         self.gen_img_emb = gen_img_emb
-        self.idx_groups = idx_groups
-        self.num_gen_img = num_gen_img
         self.max_len = max_len
         self.mask_prob = mask_prob
 
@@ -368,12 +367,12 @@ class GenDataset(Dataset):
                 else:
                     tokens.append(s+1)
                 labels.append(s+1)
-                group_sample = sample(self.idx_groups[s], 1)[0]
-                img_emb.append(self.gen_img_emb[group_sample][np.random.randint(3)]) #s는 item idx ( -1 해야할지도?)
+                sampling = np.random.randint(len(self.gen_img_emb[s]))
+                img_emb.append(self.gen_img_emb[s][np.random.randint(sampling)])
             else:
                 tokens.append(s+1)
                 labels.append(self.pad_index)
-                img_emb.append(self.origin_img_emb[s]) #s는 item idx ( -1 해야할지도?)
+                img_emb.append(self.origin_img_emb[s])
 
 
         tokens = tokens[-self.max_len :]
@@ -392,7 +391,6 @@ class GenDataset(Dataset):
         
         img_emb = img_emb[-self.max_len :]
         modal_emb = torch.stack(img_emb)
-        modal_emb.type(torch.float64)
         modal_emb = zero_padding2d(modal_emb)
 
         return (
@@ -405,42 +403,36 @@ class TestGenDataset(GenDataset):
     def __init__(
         self,
         user_seq,
-        num_user,
-        num_item,
         origin_img_emb: Optional[torch.Tensor],
         gen_img_emb: Optional[torch.Tensor],
-        idx_groups: Optional[torch.Tensor],
+
+        num_user:int,
+        num_item:int,
         num_gen_img: int = 1,
         max_len: int = 30,
     ) -> None:
         super().__init__(
             user_seq=user_seq,
-            num_user=num_user,
-            num_item=num_item,
             origin_img_emb=origin_img_emb,
             gen_img_emb=gen_img_emb,
-            idx_groups=idx_groups,
+            num_user=num_user,
+            num_item=num_item,
             num_gen_img=num_gen_img,
             max_len=max_len
         )
 
     def __getitem__(self, index):
         user = self.user_seq[index]
-        
         tokens = torch.tensor(user, dtype=torch.long) + 1
         labels = [0 for _ in range(self.max_len)]
         img_emb = []
     
-
         labels[-1] = tokens[-1].item()  # target
         tokens[-1] = self.mask_index  # masking
-
-
         tokens = tokens[-self.max_len :]
-        mask_len = self.max_len - len(tokens)
-        
         labels = torch.tensor(labels, dtype=torch.long)
         
+        mask_len = self.max_len - len(tokens)
         zero_padding1d = nn.ZeroPad1d((mask_len, 0))
         zero_padding2d = nn.ZeroPad2d((0,0,mask_len,0))
         
@@ -448,12 +440,11 @@ class TestGenDataset(GenDataset):
         
         for i in range(len(user)-1):
             img_emb.append(self.origin_img_emb[user[i]])
+        sampling = np.random.randint(len(self.gen_img_emb[user[-1]]))
+        img_emb.append(self.gen_img_emb[user[-1]][sampling])
 
-        group_sample = sample(self.idx_groups[user[-1]], 1)[0]
-        img_emb.append(self.gen_img_emb[group_sample][np.random.randint(3)])
         img_emb = img_emb[-self.max_len:]
         modal_emb = torch.stack(img_emb)
-        modal_emb.type(torch.float64)
         modal_emb = zero_padding2d(modal_emb)
         
 
@@ -466,22 +457,30 @@ class DescriptionDataset(Dataset):
     def __init__(
             self,
             user_seq,
-            num_user,
-            num_item,
             text_emb :Optional[torch.Tensor],
+            mean: float,
+            std: float,
+
+            num_user:int,
+            num_item:int,
             max_len : int = 30,
             mask_prob : float = 0.15,
     ) -> None:
         
         self.user_seq = user_seq
+        self.text_emb = text_emb
+        self.mean = mean
+        self.std = std
+        self.noise_size = text_emb.shape[-1]
+
         self.num_user = num_user
         self.num_item = num_item
         self.max_len = max_len
         self.mask_prob = mask_prob
-        self.text_emb = text_emb
 
         self.pad_index = 0
         self.mask_index = self.num_item+1
+        
 
     def __len__(self):
         return self.num_user
@@ -504,7 +503,9 @@ class DescriptionDataset(Dataset):
                 else:
                     tokens.append(s+1)
                 labels.append(s+1)
-                embedding.append(self.text_emb[s])
+
+                noise = torch.normal(self.mean, self.std, size=(self.noise_size,))
+                embedding.append(self.text_emb[s]+noise)
             else:
                 tokens.append(s+1)
                 labels.append(self.pad_index)
@@ -527,11 +528,7 @@ class DescriptionDataset(Dataset):
         
         embedding = embedding[-self.max_len :]
         modal_emb = torch.stack(embedding)
-        modal_emb.type(torch.float64)
         modal_emb = zero_padding2d(modal_emb)
-
-        
-        
 
         return (
             tokens,
@@ -539,29 +536,33 @@ class DescriptionDataset(Dataset):
             labels,
         )
     
+    
 class TestDescriptionDataset(DescriptionDataset):
     def __init__(
             self,
             user_seq,
-            num_user,
-            num_item,
             text_emb :Optional[torch.Tensor],
+            mean:float,
+            std:float,
+
+            num_user:int,
+            num_item:int,
             max_len : int = 30,
-            mask_prob : float = 0.15,
     ) -> None:
         
         super().__init__(
             user_seq=user_seq,
+            text_emb=text_emb,
+            mean=mean,
+            std=std,
             num_user=num_user,
             num_item=num_item,
-            text_emb=text_emb,
             max_len=max_len,
-            mask_prob=mask_prob
         )
+
 
     def __getitem__(self, index):
         user = self.user_seq[index]
-        
         tokens = torch.tensor(user, dtype=torch.long) + 1
         labels = [0 for _ in range(self.max_len)]
         embedding = []
@@ -569,13 +570,10 @@ class TestDescriptionDataset(DescriptionDataset):
 
         labels[-1] = tokens[-1].item()  # target
         tokens[-1] = self.mask_index  # masking
-
-
         tokens = tokens[-self.max_len :]
-        mask_len = self.max_len - len(tokens)
-        
         labels = torch.tensor(labels, dtype=torch.long)
-        
+
+        mask_len = self.max_len - len(tokens)
         zero_padding1d = nn.ZeroPad1d((mask_len, 0))
         zero_padding2d = nn.ZeroPad2d((0,0,mask_len,0))
         
@@ -583,10 +581,11 @@ class TestDescriptionDataset(DescriptionDataset):
         
         for i in user:
             embedding.append(self.text_emb[i])
+        noise = torch.normal(self.mean, self.std, size=(self.noise_size,))
+        embedding[-1] += noise
 
         embedding = embedding[-self.max_len:]
         modal_emb = torch.stack(embedding)
-        modal_emb.type(torch.float64)
         modal_emb = zero_padding2d(modal_emb)
         
 
