@@ -3,6 +3,7 @@ import torch
 from src.models.bert import BERT4Rec
 from src.models.mlp import MLPRec
 from src.models.mlpbert import MLPBERT4Rec
+from src.models.crossattention import CA4Rec
 from src.utils import simple_ndcg_at_k_batch, simple_recall_at_k_batch
 from tqdm import tqdm
 
@@ -11,25 +12,27 @@ def train(model, optimizer, scheduler, dataloader, criterion, device):
     model.train()
     total_loss = 0
 
-    for tokens, modal_emb, labels, _ in tqdm(dataloader):
-        tokens = tokens.to(device)
-        modal_emb = modal_emb.to(device)
-        labels = labels.to(device)
+    with tqdm(dataloader) as t:
+        for tokens, modal_emb, labels in t:
+            tokens = tokens.to(device)
+            modal_emb = modal_emb.to(device)
+            labels = labels.to(device)
 
-        if isinstance(model, MLPBERT4Rec):
-            logits = model(log_seqs=tokens, modal_emb=modal_emb, labels=labels)
-        elif isinstance(model, BERT4Rec):
-            logits = model(log_seqs=tokens, labels=labels)
-        elif isinstance(model, MLPRec):
-            logits = model(modal_emb)
+            if isinstance(model, (MLPBERT4Rec, CA4Rec)):
+                logits = model(log_seqs=tokens, modal_emb=modal_emb, labels=labels)
+            elif isinstance(model, BERT4Rec):
+                logits = model(log_seqs=tokens, labels=labels)
+            elif isinstance(model, MLPRec):
+                logits = model(modal_emb)
 
-        loss = criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
-        model.zero_grad()
-        loss.backward()
-        optimizer.step()
-        total_loss += loss.item()
+            loss = criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
+            t.set_postfix(loss=loss.item())
+            model.zero_grad()
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
 
-    # scheduler.step()
+    scheduler.step()
     return total_loss / len(dataloader)
 
 
@@ -47,13 +50,13 @@ def eval(
     pred_list = []
 
     with torch.no_grad():
-        for users, tokens, modal_emb, labels, _ in tqdm(dataloader):
+        for users, tokens, modal_emb, labels in tqdm(dataloader):
             tokens = tokens.to(device)
             modal_emb = modal_emb.to(device)
             labels = labels.to(device)
             users = users.to(device)
 
-            if isinstance(model, MLPBERT4Rec):
+            if isinstance(model, (MLPBERT4Rec, CA4Rec)):
                 logits = model(log_seqs=tokens, modal_emb=modal_emb, labels=labels)
             elif isinstance(model, BERT4Rec):
                 logits = model(log_seqs=tokens, labels=labels)

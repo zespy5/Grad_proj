@@ -107,34 +107,47 @@ def main():
 
     print("-------------COMPLETE LOAD DATA-------------")
 
-    common_parameter = {'num_user':num_user,
-                        'num_item':num_item,
-                        'max_len': model_args['max_len'],}
+    _parameter = {'num_user':num_user,
+                  'num_item':num_item,
+                  'max_len': model_args['max_len'],
+                  'mask_prob':model_args['mask_prob']}
     
     train_dataset_class_ = getattr(DS, model_dataset["train_dataset"])
     test_dataset_class_ = getattr(DS, model_dataset["test_dataset"])
 
     if model_args["gen_img"]:
+        _parameter['origin_img_emb'] = origin_img_emb
+        _parameter['gen_img_emb']    = gen_img_emb
+        
         train_dataset = train_dataset_class_(
             user_seq=train_data,
-            origin_img_emb=origin_img_emb,
-            gen_img_emb=gen_img_emb,
-            mask_prob=model_args["mask_prob"],
-            **common_parameter
+            **_parameter
         )
-
         valid_dataset = test_dataset_class_(
             user_seq=valid_data,
-            origin_img_emb=origin_img_emb,
-            gen_img_emb=gen_img_emb,
-            **common_parameter
+            **_parameter
         )
-
         test_dataset = test_dataset_class_(
             user_seq=test_data,
-            origin_img_emb=origin_img_emb,
-            gen_img_emb=gen_img_emb,
-            **common_parameter
+            **_parameter
+        )
+        
+    elif model_args["detail_text"]:
+        _parameter['text_emb'] = text_emb
+        _parameter['mean']     = model_args['mean']
+        _parameter['std']      = model_args['std']
+        
+        train_dataset = train_dataset_class_(
+            user_seq=train_data,
+            **_parameter
+        )
+        valid_dataset = test_dataset_class_(
+            user_seq=valid_data,
+            **_parameter
+        )
+        test_dataset = test_dataset_class_(
+            user_seq=test_data,
+            **_parameter
         )
 
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)

@@ -92,13 +92,13 @@ class CA4Rec(nn.Module):
         if self.use_linear:
             self.out = nn.Linear(self.hidden_size, self.num_item + 1)
 
-    def forward(self, log_seqs, img_emb, **kwargs):
+    def forward(self, log_seqs, modal_emb, **kwargs):
         seqs = self.item_emb(log_seqs).to(self.device)
         attn_mask = (log_seqs > 0).unsqueeze(1).repeat(1, log_seqs.shape[1], 1).unsqueeze(1).to(self.device)
         
         if self.img_embedding_size != self.hidden_size:
-            img_emb = self.projection(img_emb)
-        img_emb.to(self.device)
+            modal_emb = self.projection(modal_emb)
+        modal_emb.to(self.device)
 
         if self.pos_emb:
             positions = np.tile(np.array(range(log_seqs.shape[1])), [log_seqs.shape[0], 1])
@@ -110,7 +110,7 @@ class CA4Rec(nn.Module):
             seqs, _ = block(seqs, attn_mask)
             
         for block in self.decoder_blocks:
-            seqs, _ = block(seqs, img_emb, attn_mask)
+            seqs, _ = block(seqs, modal_emb, attn_mask)
 
         out = self.out(seqs) if self.use_linear else seqs
         return out
