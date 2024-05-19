@@ -161,15 +161,8 @@ def main():
     model_class_ = models[model_name]
 
     if model_name in ("MLPBERT4Rec", "MLPRec"):
-        model_args["gen_img_emb"] = gen_img_emb
-        model_args["text_emb"] = text_emb
-    else:
-        model_args["gen_img_emb"], model_args["text_emb"] = None, None
+        model_args["linear_in_size"] = model_args['hidden_size']
 
-    if model_args["gen_img_emb"] is not None:
-        model_args["linear_in_size"] = model_args["gen_img_emb"].shape[-1] * model_args["num_gen_img"]
-    if model_args["text_emb"] is not None:
-        model_args["linear_in_size"] = model_args["text_emb"].shape[-1]
 
     model = model_class_(
         **model_args,
