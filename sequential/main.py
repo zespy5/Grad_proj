@@ -118,6 +118,7 @@ def main():
     if model_args["gen_img"]:
         _parameter['origin_img_emb'] = origin_img_emb
         _parameter['gen_img_emb']    = gen_img_emb
+        _parameter['closest_origin'] = model_args['closest_origin']
         
         train_dataset = train_dataset_class_(
             user_seq=train_data,

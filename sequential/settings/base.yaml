@@ -3,7 +3,7 @@
 experiment_name: "CA detail text std=0.3"
 
 # Model settings
-model_name: "MLPRec"
+model_name: "CA4Rec"
 
 model_dataset:
   train_dataset: "GenDataset"
@@ -27,6 +27,7 @@ model_arguments:
   mean: 0.0                # noise mean(available if img_noise is True)
   
   gen_img: True          # group by same image description
+  closest_origin: False
 
   neg_sampling: False
 
