@@ -57,7 +57,7 @@ class GenDataset(Dataset):
         labels = []
         img_emb = []
         
-        get_gen = self.get_gen_sample if self.closest_origin else self.get_gen_closest_origin
+        get_gen = self.get_gen_closest_origin if self.closest_origin else  self.get_gen_sample
 
         for s in user:
             prob = random.random()

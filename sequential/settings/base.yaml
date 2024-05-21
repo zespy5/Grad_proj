@@ -1,9 +1,9 @@
 # Base settings for common model & experiment
 
-experiment_name: "bert+mlp gen emb cloest to origin img"
+experiment_name: "CA gen img grouped by description fix CA"
 
 # Model settings
-model_name: "MLPBERT4Rec"
+model_name: "CA4Rec"
 
 model_dataset:
   # GenDataset : generative image, DescriptionDataset : image description 
@@ -14,7 +14,7 @@ model_dataset:
 model_arguments:
   hidden_size: 512        # hidden size for multi head attention
   num_attention_heads: 4  # number of heads for multi head attention
-  num_hidden_layers: 3    # number of transformer layers
+  num_hidden_layers: 2    # number of transformer layers
   max_len: 90             # length of input sequence
   dropout_prob: 0.2       # dropout probability
   hidden_act: "gelu"      # Activation function for attention, mlp
@@ -24,12 +24,12 @@ model_arguments:
   num_mlp_layers: 3       # number of mlp layers
   merge: "mul"            # ways to merge output of bert4rec and image embeddings. One of ["concat", "mul"].
 
-  detail_text: True       # using embedding of detail_text of item
+  detail_text: False       # using embedding of detail_text of item
   std: 0.3                # noise std(available if img_noise is True)
   mean: 0.0               # noise mean(available if img_noise is True)
   
   gen_img: True           # group by same image description
-  closest_origin: True    # the gen image embedding closest to origin image embedding 
+  closest_origin: False    # the gen image embedding closest to origin image embedding 
 
   neg_sampling: False
 

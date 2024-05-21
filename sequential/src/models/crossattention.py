@@ -26,14 +26,14 @@ class DecoderBlock(nn.Module):
         self.cross_attention = MultiHeadAttention(num_attention_heads, hidden_size, dropout_prob)
         self.pointwise_feedforward = PositionwiseFeedForward(hidden_size, dropout_prob, hidden_act)
 
-    def forward(self, input_enc, img_emb, mask):
-        q,k,v = input_enc, input_enc, input_enc
-        output_enc, attn_dist = self.attention(q,k,v, mask)
+    def forward(self, enc_out, img_emb, mask):
+        q,k,v = img_emb, img_emb, img_emb
+        output, attn_dist = self.attention(q,k,v, mask)
         
-        _q,_k,_v = img_emb, output_enc, output_enc
-        output_enc, attn_dist = self.cross_attention(_q,_k,_v, mask)
+        _q,_k,_v = enc_out, output, output
+        output_dec, attn_dist = self.cross_attention(_q,_k,_v, mask)
         
-        output_enc = self.pointwise_feedforward(output_enc)
+        output_enc = self.pointwise_feedforward(output_dec)
         return output_enc, attn_dist
 
 
@@ -108,9 +108,10 @@ class CA4Rec(nn.Module):
 
         for block in self.encoder_blocks:
             seqs, _ = block(seqs, attn_mask)
-            
+        
+        decoder_out = modal_emb    
         for block in self.decoder_blocks:
-            seqs, _ = block(seqs, modal_emb, attn_mask)
+            decoder_out, _ = block(seqs, decoder_out, attn_mask)
 
-        out = self.out(seqs) if self.use_linear else seqs
+        out = self.out(decoder_out) if self.use_linear else seqs
         return out
