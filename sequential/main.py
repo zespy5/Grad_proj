@@ -40,6 +40,7 @@ def main():
     ############ SET HYPER PARAMS #############
     ## TRAIN ##
     lr = settings["lr"]
+    lr_ld = settings["lr_lambda"]
     epoch = settings["epoch"]
     batch_size = settings["batch_size"]
     weight_decay = settings["weight_decay"]
@@ -173,7 +174,7 @@ def main():
 
     criterion = nn.CrossEntropyLoss(ignore_index=0)
     optimizer = Adam(params=model.parameters(), lr=lr, weight_decay=weight_decay)
-    scheduler = lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lambda epoch: 0.95**epoch)
+    scheduler = lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lambda epoch: lr_ld**epoch)
 
 
 

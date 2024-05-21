@@ -34,7 +34,8 @@ model_arguments:
   neg_sampling: False
 
 
-lr: 0.0001
+lr: 0.00001
+lr_lambda: 1
 epoch: 100
 batch_size: 32
 weight_decay: 0.001 # weight decay for Adam
