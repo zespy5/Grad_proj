@@ -169,7 +169,7 @@ class DescriptionDataset(Dataset):
             user_seq,
             text_emb :Optional[torch.Tensor],
             mean: float,
-            std: float,
+            std,
 
             num_user:int,
             num_item:int,
@@ -192,7 +192,12 @@ class DescriptionDataset(Dataset):
         self.pad_index = 0
         self.mask_index = self.num_item+1
         
-
+    def get_noise(self):
+        if torch.is_tensor(self.std):
+            return torch.normal(mean=self.mean, std = self.std)
+        else:
+            return torch.normal(self.mean, self.std, size=(self.noise_size,))
+        
     def __len__(self):
         return self.num_user
     
@@ -215,8 +220,7 @@ class DescriptionDataset(Dataset):
                     tokens.append(s+1)
                 labels.append(s+1)
 
-                noise = torch.normal(self.mean, self.std, size=(self.noise_size,))
-                embedding.append(self.text_emb[s]+noise)
+                embedding.append(self.text_emb[s]+self.get_noise())
             else:
                 tokens.append(s+1)
                 labels.append(self.pad_index)
@@ -254,7 +258,7 @@ class TestDescriptionDataset(DescriptionDataset):
             user_seq,
             text_emb :Optional[torch.Tensor],
             mean:float,
-            std:float,
+            std,
 
             num_user:int,
             num_item:int,
@@ -293,8 +297,7 @@ class TestDescriptionDataset(DescriptionDataset):
         
         for i in user:
             embedding.append(self.text_emb[i])
-        noise = torch.normal(self.mean, self.std, size=(self.noise_size,))
-        embedding[-1] += noise
+        embedding[-1] += self.get_noise()
 
         embedding = embedding[-self.max_len:]
         modal_emb = torch.stack(embedding)

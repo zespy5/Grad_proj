@@ -10,7 +10,7 @@ from src import dataset as DS
 from src.models.bert import BERT4Rec
 from src.models.mlp import MLPRec
 from src.models.mlpbert import MLPBERT4Rec
-from src.models.crossattention import CA4Rec
+from src.models.crossattention import CA4Rec, DOCA4Rec
 from src.train import eval, train
 from src.utils import get_config, get_timestamp, load_json, mk_dir, seed_everything
 from torch.optim import Adam, lr_scheduler
@@ -21,8 +21,8 @@ def main():
     ############# SETTING #############
     setting_yaml_path = "./settings/base.yaml"
     timestamp = get_timestamp()
-    models = {"BERT4Rec": BERT4Rec, "MLPRec": MLPRec, "MLPBERT4Rec": MLPBERT4Rec, "CA4Rec":CA4Rec}  # is it proper?
-
+    models = {"BERT4Rec": BERT4Rec, "MLPRec": MLPRec, "MLPBERT4Rec": MLPBERT4Rec,
+               "CA4Rec":CA4Rec, 'DOCA4Rec': DOCA4Rec}
     seed_everything()
     mk_dir("./model")
     mk_dir("./data")
@@ -97,6 +97,10 @@ def main():
     # input is text embeddings grouped by description
     if model_args["detail_text"]:
         text_emb = torch.load(f"{path}/detail_text_embeddings.pt") 
+        if model_args['std'] < 0:
+            gen_emb = torch.load(f"{path}/gen_img_emb.pt")
+            gen_emb = gen_emb.reshape((-1,512))
+            gen_std = torch.std(gen_emb, dim=0)
 
     # input is generative and origin image grouped by description
     if model_args["gen_img"]:
@@ -137,7 +141,7 @@ def main():
     elif model_args["detail_text"]:
         _parameter['text_emb'] = text_emb
         _parameter['mean']     = model_args['mean']
-        _parameter['std']      = model_args['std']
+        _parameter['std']      = gen_std if model_args['std'] < 0 else model_args['std']
         
         train_dataset = train_dataset_class_(
             user_seq=train_data,

@@ -3,7 +3,7 @@ import torch
 from src.models.bert import BERT4Rec
 from src.models.mlp import MLPRec
 from src.models.mlpbert import MLPBERT4Rec
-from src.models.crossattention import CA4Rec
+from src.models.crossattention import CA4Rec, DOCA4Rec
 from src.utils import simple_ndcg_at_k_batch, simple_recall_at_k_batch
 from tqdm import tqdm
 
@@ -18,7 +18,7 @@ def train(model, optimizer, scheduler, dataloader, criterion, device):
             modal_emb = modal_emb.to(device)
             labels = labels.to(device)
 
-            if isinstance(model, (MLPBERT4Rec, CA4Rec)):
+            if isinstance(model, (MLPBERT4Rec, CA4Rec, DOCA4Rec)):
                 logits = model(log_seqs=tokens, modal_emb=modal_emb, labels=labels)
             elif isinstance(model, BERT4Rec):
                 logits = model(log_seqs=tokens, labels=labels)
@@ -56,7 +56,7 @@ def eval(
             labels = labels.to(device)
             users = users.to(device)
 
-            if isinstance(model, (MLPBERT4Rec, CA4Rec)):
+            if isinstance(model, (MLPBERT4Rec, CA4Rec, DOCA4Rec)):
                 logits = model(log_seqs=tokens, modal_emb=modal_emb, labels=labels)
             elif isinstance(model, BERT4Rec):
                 logits = model(log_seqs=tokens, labels=labels)
