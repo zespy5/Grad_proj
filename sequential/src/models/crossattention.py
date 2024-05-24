@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 
 from .common import MultiHeadAttention, PositionwiseFeedForward
+from .bert import BERT4Rec
 
 
 class EncoderBlock(nn.Module):
@@ -36,6 +37,41 @@ class DecoderBlock(nn.Module):
         output_enc = self.pointwise_feedforward(output_dec)
         return output_enc, attn_dist
 
+class Decoder(nn.Module):
+    def __init__(
+            self,
+            num_item: int,
+            hidden_size: int = 512,
+            num_attention_heads: int = 4,
+            num_hidden_layers: int = 3,
+            dropout_prob: float = 0.2,
+            hidden_act: Literal["gelu", "mish", "silu"] = "gelu",
+            use_linear: bool = True,
+        ):
+        super().__init__()
+        self.hidden_size= hidden_size
+        self.num_item = num_item
+        self.num_decoder_layers=num_hidden_layers
+        self.use_linear = use_linear
+
+        decoderblocks = [DecoderBlock(num_attention_heads,
+                                      hidden_size,
+                                      dropout_prob,
+                                      hidden_act)
+                        for _ in range(self.num_decoder_layers)]
+        
+        self.decoder_blocks = nn.ModuleList(decoderblocks)
+
+        if self.use_linear:
+            self.out = nn.Linear(self.hidden_size, self.num_item + 1)
+
+    def forward(self, seqs, modal_emb, attn_mask, **kwargs):
+
+        for block in self.decoder_blocks:
+            modal_emb, _ = block(seqs, modal_emb, attn_mask)
+
+        out = self.out(modal_emb) if self.use_linear else modal_emb
+        return out
 
 class CA4Rec(nn.Module):
     def __init__(
@@ -64,55 +100,35 @@ class CA4Rec(nn.Module):
         self.hidden_size = hidden_size
         self.img_embedding_size = 512
 
-        if self.img_embedding_size != self.hidden_size:
-            self.projection = nn.Linear(self.img_embedding_size, self.hidden_size)
-
-        self.item_emb = nn.Embedding(num_item + 2, hidden_size, padding_idx=0)
-        self.dropout = nn.Dropout(dropout_prob)
-        self.emb_layernorm = nn.LayerNorm(hidden_size, eps=1e-6)
-
-        if self.pos_emb:
-            self.positional_emb = nn.Embedding(max_len, hidden_size)
-            
-        encoderblocks = [EncoderBlock(num_attention_heads,
-                                      hidden_size,
-                                      dropout_prob,
-                                      hidden_act)
-                        for _ in range(self.num_encoder_layers)]
+        self.Encoder = BERT4Rec(
+            num_item=num_item,
+            hidden_size=hidden_size,
+            num_attention_heads=num_attention_heads,
+            num_hidden_layers=num_hidden_layers,
+            hidden_act=hidden_act,
+            max_len=max_len,
+            dropout_prob=dropout_prob,
+            pos_emb=pos_emb,
+            use_linear=False,
+            device=device,
+            **kwargs
+        )
         
-        decoderblocks = [DecoderBlock(num_attention_heads,
-                                      hidden_size,
-                                      dropout_prob,
-                                      hidden_act)
-                        for _ in range(self.num_decoder_layers)]
-        
-        self.encoder_blocks = nn.ModuleList(encoderblocks)
-        self.decoder_blocks = nn.ModuleList(decoderblocks)
-
-        if self.use_linear:
-            self.out = nn.Linear(self.hidden_size, self.num_item + 1)
+        self.Decoder = Decoder(
+            num_item=num_item,
+            hidden_size=hidden_size,
+            num_attention_heads=num_attention_heads,
+            num_hidden_layers=num_hidden_layers,
+            dropout_prob=dropout_prob,
+            hidden_act=hidden_act,
+            use_linear=True
+        )
 
     def forward(self, log_seqs, modal_emb, **kwargs):
-        seqs = self.item_emb(log_seqs).to(self.device)
-        attn_mask = (log_seqs > 0).unsqueeze(1).repeat(1, log_seqs.shape[1], 1).unsqueeze(1).to(self.device)
-        
-        if self.img_embedding_size != self.hidden_size:
-            modal_emb = self.projection(modal_emb)
-        modal_emb.to(self.device)
+        encoder_out, attn_mask = self.Encoder(log_seqs)
 
-        if self.pos_emb:
-            positions = np.tile(np.array(range(log_seqs.shape[1])), [log_seqs.shape[0], 1])
-            seqs += self.positional_emb(torch.tensor(positions).to(self.device))
+        out = self.Decoder(encoder_out, modal_emb, attn_mask)
 
-        seqs = self.emb_layernorm(self.dropout(seqs))
-
-        for block in self.encoder_blocks:
-            seqs, _ = block(seqs, attn_mask)
-        
-        for block in self.decoder_blocks:
-            modal_emb, _ = block(seqs, modal_emb, attn_mask)
-
-        out = self.out(modal_emb) if self.use_linear else modal_emb
         return out
     
 

@@ -1,6 +1,6 @@
 # Base settings for common model & experiment
 
-experiment_name: "fixed CA gen grouped by description"
+experiment_name: "BERT4Rec"
 
 # Model settings
 model_name: "CA4Rec"
@@ -22,10 +22,10 @@ model_arguments:
   mask_prob: 0.4          # Input sequence masking probability
 
   num_mlp_layers: 3       # number of mlp layers
-  merge: "mul"            # ways to merge output of bert4rec and image embeddings. One of ["concat", "mul"].
+  merge: "concat"            # ways to merge output of bert4rec and image embeddings. One of ["concat", "mul"].
 
   detail_text: False       # using embedding of detail_text of item
-  std:  0.1               # noise std(available if std value is minus, the std is adjusting std )
+  std:  0.0               # noise std(available if std value is minus, the std is adjusting std )
   mean: 0.0               # noise mean
   
   gen_img: True           # group by same image description
@@ -35,7 +35,7 @@ model_arguments:
 
 
 lr: 0.0001
-lr_lambda: 0.8
+lr_step: 25
 epoch: 100
 batch_size: 64
 weight_decay: 0.001 # weight decay for Adam

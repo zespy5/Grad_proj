@@ -16,6 +16,8 @@ from src.utils import get_config, get_timestamp, load_json, mk_dir, seed_everyth
 from torch.optim import Adam, lr_scheduler
 from torch.utils.data import DataLoader
 
+from src.custom_optimizer import MultiOptimizer, MultiScheduler
+
 
 def main():
     ############# SETTING #############
@@ -40,7 +42,7 @@ def main():
     ############ SET HYPER PARAMS #############
     ## TRAIN ##
     lr = settings["lr"]
-    lr_ld = settings["lr_lambda"]
+    lr_step = settings["lr_step"]
     epoch = settings["epoch"]
     batch_size = settings["batch_size"]
     weight_decay = settings["weight_decay"]
@@ -177,8 +179,12 @@ def main():
     ).to(device)
 
     criterion = nn.CrossEntropyLoss(ignore_index=0)
-    optimizer = Adam(params=model.parameters(), lr=lr, weight_decay=weight_decay)
-    scheduler = lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lambda epoch: lr_ld**epoch)
+    if model_name=="CA4Rec":
+        optimizer = MultiOptimizer(model, lr, weight_decay)
+        scheduler = MultiScheduler(optimizer.encoder_optimizer, optimizer.decoder_optimizer)
+    else:
+        optimizer = Adam(params=model.parameters(), lr=lr, weight_decay=weight_decay)
+        scheduler = lr_scheduler.StepLR(optimizer=optimizer, step_size=lr_step, gamma=0.5)
 
 
 

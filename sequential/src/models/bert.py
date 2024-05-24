@@ -76,4 +76,4 @@ class BERT4Rec(nn.Module):
         bert_out = seqs
 
         out = self.out(bert_out) if self.use_linear else bert_out
-        return out
+        return out , attn_mask

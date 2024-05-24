@@ -21,7 +21,7 @@ def train(model, optimizer, scheduler, dataloader, criterion, device):
             if isinstance(model, (MLPBERT4Rec, CA4Rec, DOCA4Rec)):
                 logits = model(log_seqs=tokens, modal_emb=modal_emb, labels=labels)
             elif isinstance(model, BERT4Rec):
-                logits = model(log_seqs=tokens, labels=labels)
+                logits, _ = model(log_seqs=tokens, labels=labels)
             elif isinstance(model, MLPRec):
                 logits = model(modal_emb)
 
