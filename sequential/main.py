@@ -43,6 +43,9 @@ def main():
     ## TRAIN ##
     lr = settings["lr"]
     lr_step = settings["lr_step"]
+    lr_milestones = settings["lr_milestones"]
+    lr_encoder_gamma = settings["lr_encoder_gamma"]
+    lr_decoder_gamma = settings["lr_decoder_gamma"]
     epoch = settings["epoch"]
     batch_size = settings["batch_size"]
     weight_decay = settings["weight_decay"]
@@ -181,7 +184,8 @@ def main():
     criterion = nn.CrossEntropyLoss(ignore_index=0)
     if model_name=="CA4Rec":
         optimizer = MultiOptimizer(model, lr, weight_decay)
-        scheduler = MultiScheduler(optimizer.encoder_optimizer, optimizer.decoder_optimizer)
+        scheduler = MultiScheduler(optimizer.encoder_optimizer, optimizer.decoder_optimizer,
+                                   milestones=lr_milestones, gamma1=lr_encoder_gamma, gamma2=lr_decoder_gamma)
     else:
         optimizer = Adam(params=model.parameters(), lr=lr, weight_decay=weight_decay)
         scheduler = lr_scheduler.StepLR(optimizer=optimizer, step_size=lr_step, gamma=0.5)
@@ -192,8 +196,14 @@ def main():
     for i in range(epoch):
         print("-------------TRAIN-------------")
         train_loss = train(model, optimizer, scheduler, train_dataloader, criterion, device)
-        print(f'EPOCH : {i+1} | TRAIN LOSS : {train_loss} | LR : {optimizer.param_groups[0]["lr"]}')
-        wandb.log({"loss": train_loss, "epoch": i + 1, "lr": optimizer.param_groups[0]["lr"]})
+        if model_name=="CA4Rec":
+            print(f'EPOCH : {i+1} | TRAIN LOSS : {train_loss} | LR : {optimizer.param_groups["lr_encoder"]} | {optimizer.param_groups["lr_decoder"]}')
+            wandb.log({"loss": train_loss, "epoch": i + 1,
+                       "lr_encoder": optimizer.param_groups["lr_encoder"],
+                       "lr_decoder": optimizer.param_groups["lr_decoder"]})
+        else:
+            print(f'EPOCH : {i+1} | TRAIN LOSS : {train_loss} | LR : {optimizer.param_groups[0]["lr"]}')
+            wandb.log({"loss": train_loss, "epoch": i + 1, "lr": optimizer.param_groups[0]["lr"]})
 
         if i % settings["valid_step"] == 0:
             print("-------------VALID-------------")
