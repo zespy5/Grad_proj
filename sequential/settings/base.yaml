@@ -6,9 +6,9 @@ experiment_name: "CA4Rec multi opti text std=0"
 model_name: "CA4Rec"
 
 model_dataset:
-  # GenDataset : generative image, DescriptionDataset : image description 
-  train_dataset: "DescriptionDataset"     
-  # TestGenDataset : generative image, TestDescriptionDataset : image description 
+  # GenDataset : generative image, DescriptionDataset : image description
+  train_dataset: "DescriptionDataset"
+  # TestGenDataset : generative image, TestDescriptionDataset : image description
   test_dataset: "TestDescriptionDataset"
 
 model_arguments:
@@ -20,6 +20,7 @@ model_arguments:
   hidden_act: "gelu"      # Activation function for attention, mlp
   pos_emb: True           # True if using positional embedding
   mask_prob: 0.4          # Input sequence masking probability
+  model_ckpt_path: "./model/0427000421/model_val_9.835206767016421.pt"
 
   num_mlp_layers: 3       # number of mlp layers
   merge: "concat"            # ways to merge output of bert4rec and image embeddings. One of ["concat", "mul"].
@@ -27,9 +28,9 @@ model_arguments:
   detail_text: True       # using embedding of detail_text of item
   std:  0.0               # noise std(available if std value is minus, the std is adjusting std )
   mean: 0.0               # noise mean
-  
+
   gen_img: False           # group by same image description
-  closest_origin: False    # the gen image embedding closest to origin image embedding 
+  closest_origin: False    # the gen image embedding closest to origin image embedding
 
   neg_sampling: False
 
