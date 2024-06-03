@@ -14,8 +14,8 @@ class BERT4RecBlock(nn.Module):
         self.pointwise_feedforward = PositionwiseFeedForward(hidden_size, dropout_prob, hidden_act)
 
     def forward(self, input_enc, mask):
-        q,k,v = input_enc, input_enc, input_enc
-        output_enc, attn_dist = self.attention(q,k,v, mask)
+        q, k, v = input_enc, input_enc, input_enc
+        output_enc, attn_dist = self.attention(q, k, v, mask)
         output_enc = self.pointwise_feedforward(output_enc)
         return output_enc, attn_dist
 
@@ -76,4 +76,4 @@ class BERT4Rec(nn.Module):
         bert_out = seqs
 
         out = self.out(bert_out) if self.use_linear else bert_out
-        return out , attn_mask
+        return out, attn_mask

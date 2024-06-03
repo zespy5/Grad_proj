@@ -1,30 +1,36 @@
+# flake8: noqa
 import os
 import shutil
 
 import dotenv
 import torch
 import torch.nn as nn
-import wandb
 from huggingface_hub import snapshot_download
 from src import dataset as DS
+from src.custom_optimizer import MultiOptimizer, MultiScheduler
 from src.models.bert import BERT4Rec
+from src.models.crossattention import CA4Rec, DOCA4Rec
 from src.models.mlp import MLPRec
 from src.models.mlpbert import MLPBERT4Rec
-from src.models.crossattention import CA4Rec, DOCA4Rec
 from src.train import eval, train
 from src.utils import get_config, get_timestamp, load_json, mk_dir, seed_everything
 from torch.optim import Adam, lr_scheduler
 from torch.utils.data import DataLoader
 
-from src.custom_optimizer import MultiOptimizer, MultiScheduler
+import wandb
 
 
 def main():
     ############# SETTING #############
     setting_yaml_path = "./settings/base.yaml"
     timestamp = get_timestamp()
-    models = {"BERT4Rec": BERT4Rec, "MLPRec": MLPRec, "MLPBERT4Rec": MLPBERT4Rec,
-               "CA4Rec":CA4Rec, 'DOCA4Rec': DOCA4Rec}
+    models = {
+        "BERT4Rec": BERT4Rec,
+        "MLPRec": MLPRec,
+        "MLPBERT4Rec": MLPBERT4Rec,
+        "CA4Rec": CA4Rec,
+        "DOCA4Rec": DOCA4Rec,
+    }
     seed_everything()
     mk_dir("./model")
     mk_dir("./data")
@@ -33,7 +39,7 @@ def main():
 
     model_name: str = settings["model_name"]
     model_args: dict = settings["model_arguments"]
-    model_dataset : dict = settings["model_dataset"]
+    model_dataset: dict = settings["model_dataset"]
     name = f"work-{timestamp}_" + settings["experiment_name"]
 
     ############ SET HYPER PARAMS #############
@@ -101,14 +107,14 @@ def main():
 
     # conditional DATA
     # negative sampling
-    sim_matrix = torch.load(f"{path}/sim_matrix_sorted.pt") if model_args["neg_sampling"] else None
+    torch.load(f"{path}/sim_matrix_sorted.pt") if model_args["neg_sampling"] else None
 
     # input is text embeddings grouped by description
     if model_args["detail_text"]:
-        text_emb = torch.load(f"{path}/detail_text_embeddings.pt") 
-        if model_args['std'] < 0:
+        text_emb = torch.load(f"{path}/detail_text_embeddings.pt")
+        if model_args["std"] < 0:
             gen_emb = torch.load(f"{path}/gen_img_emb.pt")
-            gen_emb = gen_emb.reshape((-1,512))
+            gen_emb = gen_emb.reshape((-1, 512))
             gen_std = torch.std(gen_emb, dim=0)
 
     # input is generative and origin image grouped by description
@@ -117,15 +123,17 @@ def main():
         origin_img_emb = torch.load(f"{path}/origin_img_emb.pt")
 
     num_user = metadata["num of user"]
-    num_item = metadata["num of item"]    
+    num_item = metadata["num of item"]
 
     print("-------------COMPLETE LOAD DATA-------------")
 
-    _parameter = {'num_user':num_user,
-                  'num_item':num_item,
-                  'max_len': model_args['max_len'],
-                  'mask_prob':model_args['mask_prob']}
-    
+    _parameter = {
+        "num_user": num_user,
+        "num_item": num_item,
+        "max_len": model_args["max_len"],
+        "mask_prob": model_args["mask_prob"],
+    }
+
     train_dataset_class_ = getattr(DS, model_dataset["train_dataset"])
     test_dataset_class_ = getattr(DS, model_dataset["test_dataset"])
 
@@ -148,22 +156,13 @@ def main():
         )
         
     elif model_args["detail_text"]:
-        _parameter['text_emb'] = text_emb
-        _parameter['mean']     = model_args['mean']
-        _parameter['std']      = gen_std if model_args['std'] < 0 else model_args['std']
-        
-        train_dataset = train_dataset_class_(
-            user_seq=train_data,
-            **_parameter
-        )
-        valid_dataset = test_dataset_class_(
-            user_seq=valid_data,
-            **_parameter
-        )
-        test_dataset = test_dataset_class_(
-            user_seq=test_data,
-            **_parameter
-        )
+        _parameter["text_emb"] = text_emb
+        _parameter["mean"] = model_args["mean"]
+        _parameter["std"] = gen_std if model_args["std"] < 0 else model_args["std"]
+
+        train_dataset = train_dataset_class_(user_seq=train_data, **_parameter)
+        valid_dataset = test_dataset_class_(user_seq=valid_data, **_parameter)
+        test_dataset = test_dataset_class_(user_seq=test_data, **_parameter)
 
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)
     valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, num_workers=num_workers)
@@ -175,9 +174,8 @@ def main():
     ## MODEL INIT ##
     model_class_ = models[model_name]
 
-    if model_name in ("MLPBERT4Rec", "MLPRec"):
-        model_args["linear_in_size"] = model_args['hidden_size']
-
+    if model_name in ("MLPBERT4Rec", "MLPRec", "MLPwithBERTFreeze"):
+        model_args["linear_in_size"] = model_args["hidden_size"]
 
     model = model_class_(
         **model_args,
@@ -193,8 +191,6 @@ def main():
     else:
         optimizer = Adam(params=model.parameters(), lr=lr, weight_decay=weight_decay)
         scheduler = lr_scheduler.StepLR(optimizer=optimizer, step_size=lr_step, gamma=0.5)
-
-
 
     ############# TRAIN AND EVAL #############
     best_loss = 100

@@ -37,7 +37,7 @@ class MultiHeadAttention(nn.Module):
         self.dropout = nn.Dropout(dropout_prob)
         self.layerNorm = nn.LayerNorm(self.hidden_size, 1e-6)
 
-    def forward(self, q,k,v, mask):
+    def forward(self, q, k, v, mask):
         residual = q  # residual connection
         batch_size, seqlen = q.size(0), q.size(1)
 

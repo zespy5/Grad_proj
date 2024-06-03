@@ -12,10 +12,9 @@ class MultiOptimizer():
 
         self.encoder_optimizer = Adam(params=self.encoder_params, lr=self.lr1, weight_decay=weight_decay)
         self.decoder_optimizer = Adam(params=self.decoder_params, lr=self.lr2, weight_decay=weight_decay)
-        self.enc_optim_lr = self.encoder_optimizer.param_groups[0]['lr']
-        self.dec_optim_lr = self.decoder_optimizer.param_groups[0]['lr']
-        self.param_groups = {"lr_encoder":self.enc_optim_lr,
-                              "lr_decoder":self.dec_optim_lr}
+        self.enc_optim_lr = self.encoder_optimizer.param_groups[0]["lr"]
+        self.dec_optim_lr = self.decoder_optimizer.param_groups[0]["lr"]
+        self.param_groups = {"lr_encoder": self.enc_optim_lr, "lr_decoder": self.dec_optim_lr}
 
     def zero_grad(self):
         self.encoder_optimizer.zero_grad()
@@ -24,12 +23,9 @@ class MultiOptimizer():
     def step(self):
         self.encoder_optimizer.step()
         self.decoder_optimizer.step()
-        
-        self.enc_optim_lr = self.encoder_optimizer.param_groups[0]['lr']
-        self.dec_optim_lr = self.decoder_optimizer.param_groups[0]['lr']
 
-        self.param_groups['lr_encoder'] = self.enc_optim_lr
-        self.param_groups['lr_decoder'] = self.dec_optim_lr
+        self.enc_optim_lr = self.encoder_optimizer.param_groups[0]["lr"]
+        self.dec_optim_lr = self.decoder_optimizer.param_groups[0]["lr"]
 
 class MultiScheduler():
     def __init__(self, enc_optim, milestones=[25,50,100], gamma1 = 0.25):
