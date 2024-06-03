@@ -39,15 +39,8 @@ class GenDataset(Dataset):
         
     def get_gen_sample(self, item_num):
         sampling = np.random.randint(len(self.gen_img_emb[item_num]))
-        return self.gen_img_emb[item_num][sampling]
+        return torch.as_tensor(self.gen_img_emb[item_num][sampling])
     
-    def get_gen_closest_origin(self, item_num):
-        gen_embeddings = self.gen_img_emb[item_num]
-        ori_embedding = self.origin_img_emb[item_num]
-        closet_gen_arg = torch.argmax(torch.sum(ori_embedding*gen_embeddings,dim=-1)).item()
-        return self.gen_img_emb[item_num][closet_gen_arg]
-        
-
     def __len__(self):
         return self.num_user
 
@@ -56,10 +49,9 @@ class GenDataset(Dataset):
         tokens = []
         labels = []
         img_emb = []
-        
-        get_gen = self.get_gen_closest_origin if self.closest_origin else  self.get_gen_sample
 
-        for s in user:
+        for i in range(len(user)):
+            s = user[i]
             prob = random.random()
             if prob < self.mask_prob:  # train
                 prob /= self.mask_prob
@@ -71,11 +63,21 @@ class GenDataset(Dataset):
                 else:
                     tokens.append(s+1)
                 labels.append(s+1)
-                img_emb.append(get_gen(s))
+                img_emb.append(self.get_gen_sample(s))
             else:
                 tokens.append(s+1)
                 labels.append(self.pad_index)
                 img_emb.append(self.origin_img_emb[s])
+        
+        '''prob= random.random()
+        if prob < 0.5:
+            tokens.append(self.mask_index)
+            labels.append(s+1)
+            img_emb.append(self.get_gen_sample(user[-1]))
+        else:
+            tokens.append(s+1)
+            labels.append(self.pad_index)
+            img_emb.append(self.origin_img_emb[user[-1]])'''
 
 
         tokens = tokens[-self.max_len :]
@@ -111,9 +113,7 @@ class TestGenDataset(GenDataset):
         
         num_user:int,
         num_item:int,
-        num_gen_img: int = 1,
         max_len: int = 30,
-        closest_origin:bool = False,
         **kwargs
     ) -> None:
         super().__init__(
@@ -123,14 +123,10 @@ class TestGenDataset(GenDataset):
             
             num_user=num_user,
             num_item=num_item,
-            num_gen_img=num_gen_img,
             max_len=max_len,
-            closest_origin=closest_origin,
         )
 
     def __getitem__(self, index):
-        
-        get_gen = self.get_gen_sample if self.closest_origin else self.get_gen_closest_origin
 
         user = self.user_seq[index]
         tokens = torch.tensor(user, dtype=torch.long) + 1
@@ -147,12 +143,12 @@ class TestGenDataset(GenDataset):
         zero_padding2d = nn.ZeroPad2d((0,0,mask_len,0))
         
         tokens = zero_padding1d(tokens)
-        
+
         for i in range(len(user)-1):
             img_emb.append(self.origin_img_emb[user[i]])
 
-        img_emb.append(get_gen(user[-1]))
-
+        img_emb.append(self.get_gen_sample(user[-1]))
+        
         img_emb = img_emb[-self.max_len:]
         modal_emb = torch.stack(img_emb)
         modal_emb = zero_padding2d(modal_emb)

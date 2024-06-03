@@ -2,10 +2,10 @@ from torch.optim import Adam, lr_scheduler
 
 
 class MultiOptimizer():
-    def __init__(self, model, lr, weight_decay):
+    def __init__(self, model, lr,second_lr, weight_decay):
 
         self.lr1 = lr
-        self.lr2 = lr/(2**8)
+        self.lr2 = second_lr
         
         self.encoder_params = model.Encoder.parameters()
         self.decoder_params = model.Decoder.parameters()
@@ -32,11 +32,10 @@ class MultiOptimizer():
         self.param_groups['lr_decoder'] = self.dec_optim_lr
 
 class MultiScheduler():
-    def __init__(self, enc_optim, dec_optim, milestones=[25,50,100], gamma1 = 0.25, gamma2=4):
+    def __init__(self, enc_optim, milestones=[25,50,100], gamma1 = 0.25):
         
         self.enc_scheduler = lr_scheduler.MultiStepLR(optimizer=enc_optim, milestones=milestones, gamma=gamma1)
-        self.dec_scheduler = lr_scheduler.MultiStepLR(optimizer=dec_optim, milestones=milestones, gamma=gamma2)
+
 
     def step(self):
         self.enc_scheduler.step()
-        self.dec_scheduler.step()

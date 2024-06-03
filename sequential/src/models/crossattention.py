@@ -31,7 +31,7 @@ class DecoderBlock(nn.Module):
         q,k,v = img_emb, img_emb, img_emb
         img_out, _ = self.attention(q,k,v, mask)
 
-        _q,_k,_v =  img_out, enc_out, enc_out
+        _q,_k,_v = img_out, enc_out, enc_out
         output_dec, attn_dist = self.cross_attention(_q,_k,_v, mask)
         
         output_enc = self.pointwise_feedforward(output_dec)
@@ -53,6 +53,10 @@ class Decoder(nn.Module):
         self.num_item = num_item
         self.num_decoder_layers=num_hidden_layers
         self.use_linear = use_linear
+        self.img_embedding_size = 512
+
+        if self.img_embedding_size != self.hidden_size:
+            self.projection = nn.Linear(self.img_embedding_size, self.hidden_size)
 
         decoderblocks = [DecoderBlock(num_attention_heads,
                                       hidden_size,
@@ -66,7 +70,8 @@ class Decoder(nn.Module):
             self.out = nn.Linear(self.hidden_size, self.num_item + 1)
 
     def forward(self, seqs, modal_emb, attn_mask, **kwargs):
-
+        modal_emb=self.projection(modal_emb) if self.img_embedding_size != self.hidden_size else modal_emb
+        
         for block in self.decoder_blocks:
             modal_emb, _ = block(seqs, modal_emb, attn_mask)
 

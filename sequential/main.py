@@ -28,7 +28,6 @@ def main():
     seed_everything()
     mk_dir("./model")
     mk_dir("./data")
-    mk_dir(f"./model/{timestamp}")
 
     settings = get_config(setting_yaml_path)
 
@@ -37,15 +36,16 @@ def main():
     model_dataset : dict = settings["model_dataset"]
     name = f"work-{timestamp}_" + settings["experiment_name"]
 
-    shutil.copy(setting_yaml_path, f"./model/{timestamp}/setting.yaml")
-
     ############ SET HYPER PARAMS #############
     ## TRAIN ##
     lr = settings["lr"]
     lr_step = settings["lr_step"]
+    
+    multi_optim = settings["multi_optim"]
+    second_lr = settings["second_lr"]
     lr_milestones = settings["lr_milestones"]
     lr_encoder_gamma = settings["lr_encoder_gamma"]
-    lr_decoder_gamma = settings["lr_decoder_gamma"]
+
     epoch = settings["epoch"]
     batch_size = settings["batch_size"]
     weight_decay = settings["weight_decay"]
@@ -60,6 +60,9 @@ def main():
     ## ETC ##
     n_cuda = settings["n_cuda"]
 
+    mk_dir(f"./model/{dataset}/{timestamp}")
+    shutil.copy(setting_yaml_path, f"./model/{dataset}/{timestamp}/setting.yaml")
+    
     ############ WANDB INIT #############
     print("--------------- Wandb SETTING ---------------")
     dotenv.load_dotenv()
@@ -95,6 +98,7 @@ def main():
     valid_data = torch.load(f"{path}/valid_data.pt")
     test_data = torch.load(f"{path}/test_data.pt")
 
+
     # conditional DATA
     # negative sampling
     sim_matrix = torch.load(f"{path}/sim_matrix_sorted.pt") if model_args["neg_sampling"] else None
@@ -128,7 +132,7 @@ def main():
     if model_args["gen_img"]:
         _parameter['origin_img_emb'] = origin_img_emb
         _parameter['gen_img_emb']    = gen_img_emb
-        _parameter['closest_origin'] = model_args['closest_origin']
+
         
         train_dataset = train_dataset_class_(
             user_seq=train_data,
@@ -182,10 +186,10 @@ def main():
     ).to(device)
 
     criterion = nn.CrossEntropyLoss(ignore_index=0)
-    if model_name=="CA4Rec":
-        optimizer = MultiOptimizer(model, lr, weight_decay)
-        scheduler = MultiScheduler(optimizer.encoder_optimizer, optimizer.decoder_optimizer,
-                                   milestones=lr_milestones, gamma1=lr_encoder_gamma, gamma2=lr_decoder_gamma)
+    if multi_optim:
+        optimizer = MultiOptimizer(model, lr,second_lr, weight_decay)
+        scheduler = MultiScheduler(optimizer.encoder_optimizer,
+                                   milestones=lr_milestones, gamma1=lr_encoder_gamma)
     else:
         optimizer = Adam(params=model.parameters(), lr=lr, weight_decay=weight_decay)
         scheduler = lr_scheduler.StepLR(optimizer=optimizer, step_size=lr_step, gamma=0.5)
@@ -193,10 +197,11 @@ def main():
 
 
     ############# TRAIN AND EVAL #############
+    best_loss = 100
     for i in range(epoch):
         print("-------------TRAIN-------------")
         train_loss = train(model, optimizer, scheduler, train_dataloader, criterion, device)
-        if model_name=="CA4Rec":
+        if multi_optim:
             print(f'EPOCH : {i+1} | TRAIN LOSS : {train_loss} | LR : {optimizer.param_groups["lr_encoder"]} | {optimizer.param_groups["lr_decoder"]}')
             wandb.log({"loss": train_loss, "epoch": i + 1,
                        "lr_encoder": optimizer.param_groups["lr_encoder"],
@@ -239,7 +244,13 @@ def main():
                     "valid_N40": valid_metrics["N40"],
                 }
             )
-            torch.save(model.state_dict(), f"./model/{timestamp}/model_val_{valid_loss}.pt")
+            if best_loss > valid_loss:
+                best_loss = valid_loss
+                save_state = {'epoch': i,
+                              'model_state_dict': model.state_dict(),
+                              'loss': best_loss
+                              }
+                torch.save(save_state, f"./model/{dataset}/{timestamp}/model.pt")
 
     print("-------------EVAL-------------")
     pred_list, test_metrics = eval(
@@ -257,8 +268,8 @@ def main():
         )
     )
     wandb.log(test_metrics)
-    torch.save(pred_list, f"./model/{timestamp}/prediction.pt")
-    wandb.save(f"./model/{timestamp}/prediction.pt")
+    torch.save(pred_list, f"./model/{dataset}/{timestamp}/prediction.pt")
+    wandb.save(f"./model/{dataset}/{timestamp}/prediction.pt")
 
     ############ WANDB FINISH #############
     wandb.finish()
